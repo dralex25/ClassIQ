@@ -1,0 +1,48 @@
+import type { Course, MeResponse, RosterStudent } from "@shared/contract";
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    ...init,
+  });
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) {
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+  return body;
+}
+
+export const api = {
+  me: () => request<MeResponse>("/api/me"),
+  login: (email: string, password: string) =>
+    request<MeResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  register: (payload: {
+    email: string;
+    password: string;
+    name: string;
+    role: "teacher" | "student";
+    studentId?: string;
+  }) =>
+    request<MeResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  createCourse: (name: string) =>
+    request<{ course: Course }>("/api/courses", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  roster: (courseId: string) =>
+    request<{ roster: RosterStudent[] }>(`/api/courses/${courseId}/roster`),
+  lookupJoin: (code: string) => request<{ course: Course }>(`/api/join/${encodeURIComponent(code)}`),
+  join: (joinCode: string) =>
+    request<{ course: Course }>("/api/join", {
+      method: "POST",
+      body: JSON.stringify({ joinCode }),
+    }),
+};
