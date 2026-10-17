@@ -85,3 +85,12 @@ export type SubmissionDot = Submission & {
   studentId: string | null;
   email: string;
 };
+
+/** Student's own answers — no other students, no answer key. */
+export type HistoryItem = {
+  questionId: string;
+  stem: string;
+  choiceId: string;
+  choiceText: string;
+  submittedAt: string;
+};

@@ -1,6 +1,7 @@
 import type {
   Course,
   Fence,
+  HistoryItem,
   LectureEvent,
   MeResponse,
   Question,
@@ -106,4 +107,5 @@ export const api = {
     const q = questionId ? `?questionId=${encodeURIComponent(questionId)}` : "";
     return request<{ submissions: SubmissionDot[] }>(`/api/courses/${courseId}/submissions${q}`);
   },
+  history: () => request<{ history: HistoryItem[] }>("/api/me/history"),
 };
