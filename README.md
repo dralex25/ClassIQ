@@ -42,6 +42,19 @@ npm start
 
 Then open http://localhost:3000. Render should set `PORT` and `DATABASE_URL`; the process already binds `0.0.0.0`.
 
+## Tests
+
+With Postgres migrated and `npm run dev` still running:
+
+```bash
+npm test
+```
+
+- `tests/geo.test.ts` — presence buckets (no server)
+- `tests/api.test.ts` — demo login, AME341A, last-write submit, auto-grade, CSV (hits http://localhost:3000)
+
+`npm test` will fail if the API is down. Geo tests can run alone with `npx vitest run tests/geo.test.ts`.
+
 ## Try login / join (two browsers)
 
 Seeded by `npm run db:migrate`:

@@ -9,7 +9,9 @@
     "dev:client": "vite --config client/vite.config.ts",
     "build": "vite build --config client/vite.config.ts && tsc -p tsconfig.server.json",
     "start": "node dist/server/src/index.js",
-    "db:migrate": "tsx server/src/migrate.ts"
+    "db:migrate": "tsx server/src/migrate.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -37,6 +39,7 @@
     "concurrently": "^9.2.1",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "vitest": "^5.0.5"
   }
 }
