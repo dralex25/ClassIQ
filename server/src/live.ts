@@ -83,7 +83,17 @@ function removeSocket(courseId: string, socket: WebSocket) {
 }
 
 export function attachLive(server: Server) {
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+  server.on("upgrade", (req, socket, head) => {
+    const pathname = (req.url ?? "").split("?")[0];
+    if (pathname !== "/live" && pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
+  });
   wss.on("connection", (socket: WebSocket, req: IncomingMessage) => {
     void (async () => {
       const user = await userFromSessionId(sessionIdFromCookieHeader(req.headers.cookie));

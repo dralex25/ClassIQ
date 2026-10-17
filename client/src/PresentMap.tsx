@@ -27,9 +27,15 @@ export function PresentMap({
   onPinRef.current = onPin;
 
   useEffect(() => {
-    if (!divRef.current || mapRef.current) return;
+    const el = divRef.current;
+    if (!el) return;
     const start = fence ?? { lat: 42.3601, lng: -71.0589 };
-    const map = L.map(divRef.current).setView([start.lat, start.lng], 16);
+    const existing = (el as HTMLElement & { _leaflet_id?: number })._leaflet_id;
+    if (existing) {
+      el.replaceChildren();
+      delete (el as HTMLElement & { _leaflet_id?: number })._leaflet_id;
+    }
+    const map = L.map(el).setView([start.lat, start.lng], 16);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap",
       maxZoom: 19,
@@ -37,9 +43,15 @@ export function PresentMap({
     layerRef.current = L.layerGroup().addTo(map);
     map.on("click", (e: L.LeafletMouseEvent) => onPinRef.current?.(e.latlng.lat, e.latlng.lng));
     mapRef.current = map;
+    const fit = () => map.invalidateSize();
+    const raf = requestAnimationFrame(fit);
+    window.addEventListener("resize", fit);
     return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", fit);
       map.remove();
       mapRef.current = null;
+      layerRef.current = null;
     };
   }, []);
 
