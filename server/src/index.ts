@@ -112,6 +112,11 @@ app.post("/api/auth/register", async (req, res) => {
     res.status(400).json({ error: "email, password, name, and role (teacher|student) are required" });
     return;
   }
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    res.status(400).json({ error: "Name is required" });
+    return;
+  }
   if (password.length < 6) {
     res.status(400).json({ error: "Password must be at least 6 characters" });
     return;
@@ -131,7 +136,7 @@ app.post("/api/auth/register", async (req, res) => {
       `INSERT INTO users (email, password_hash, name, student_id, role)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, email, name, role, student_id`,
-      [email.trim().toLowerCase(), passwordHash, name.trim(), trimmedStudentId, role],
+      [email.trim().toLowerCase(), passwordHash, trimmedName, trimmedStudentId, role],
     );
     const user = mapUser(result.rows[0]);
     await createSession(res, user.id);

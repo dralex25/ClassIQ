@@ -134,4 +134,52 @@ describe("ClassIQ API (running server)", () => {
     expect(text).toContain("Name");
     expect(text).toContain("Jamie Student");
   });
+
+  it("registers a dummy teacher and student, and rejects a blank name", async () => {
+    const stamp = Date.now();
+    const teacher = new ApiClient();
+    const created = await teacher.request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email: `dummy-teacher-${stamp}@classiq.local`,
+        password: "password",
+        name: "Dummy Teacher",
+        role: "teacher",
+      }),
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      user: { role: "teacher", name: "Dummy Teacher" },
+      course: null,
+    });
+
+    const student = new ApiClient();
+    const enrolled = await student.request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email: `dummy-student-${stamp}@classiq.local`,
+        password: "password",
+        name: "Dummy Student",
+        role: "student",
+        studentId: `D${stamp}`,
+      }),
+    });
+    expect(enrolled.status).toBe(201);
+    expect(enrolled.body).toMatchObject({
+      user: { role: "student", name: "Dummy Student", studentId: `D${stamp}` },
+      course: null,
+    });
+
+    const blank = new ApiClient();
+    const rejected = await blank.request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email: `dummy-blank-${stamp}@classiq.local`,
+        password: "password",
+        name: "   ",
+        role: "teacher",
+      }),
+    });
+    expect(rejected.status).toBe(400);
+  });
 });
