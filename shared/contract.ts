@@ -33,3 +33,19 @@ export type MeResponse = {
   user: User;
   course: Course | null;
 };
+
+export type McChoice = {
+  id: string;
+  text: string;
+};
+
+/** Multiple-choice item used by Plan now and Present later. */
+export type Question = {
+  id: string;
+  courseId: string;
+  stem: string;
+  choices: McChoice[];
+  /** Auto-grade key. Teacher Plan shows it; students never receive this field in later slices. */
+  correctChoiceId: string;
+  position: number;
+};

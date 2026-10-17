@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api";
+import { PlanPanel } from "./PlanPanel";
 import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
@@ -190,6 +191,7 @@ function TeacherHome({
 }) {
   const [name, setName] = useState("Intro Physics");
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"plan" | "class">("plan");
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
@@ -229,6 +231,17 @@ function TeacherHome({
         </div>
       ) : (
         <>
+          <div className="tabs">
+            <button type="button" className={tab === "plan" ? "" : "secondary"} onClick={() => setTab("plan")}>
+              Plan
+            </button>
+            <button type="button" className={tab === "class" ? "" : "secondary"} onClick={() => setTab("class")}>
+              Class
+            </button>
+          </div>
+          {tab === "plan" && <PlanPanel courseId={me.course.id} />}
+          {tab === "class" && (
+          <>
           <div className="card">
             <h2>{me.course.name}</h2>
             <p className="hint">Share this code. Students land in the waiting room.</p>
@@ -283,6 +296,8 @@ function TeacherHome({
               </table>
             )}
           </div>
+          </>
+          )}
         </>
       )}
     </div>
