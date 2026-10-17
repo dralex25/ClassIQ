@@ -1,4 +1,13 @@
-import type { Course, LectureEvent, MeResponse, Question, RosterStudent } from "@shared/contract";
+import type {
+  Course,
+  Fence,
+  LectureEvent,
+  MeResponse,
+  Question,
+  RosterStudent,
+  SubmissionDot,
+} from "@shared/contract";
+import type { GeoPing } from "@shared/geo";
 
 export type QuestionInput = {
   stem: string;
@@ -78,9 +87,23 @@ export const api = {
   closeQuestion: (courseId: string) =>
     request<LectureEvent>(`/api/courses/${courseId}/present/close`, { method: "POST" }),
   live: (courseId: string) => request<LectureEvent>(`/api/courses/${courseId}/live`),
-  submit: (choiceId: string) =>
+  submit: (choiceId: string, geo: GeoPing) =>
     request<{ ok: boolean; submittedAt: string; choiceId: string }>("/api/submit", {
       method: "POST",
-      body: JSON.stringify({ choiceId }),
+      body: JSON.stringify(
+        "noLocation" in geo
+          ? { choiceId, noLocation: true }
+          : { choiceId, lat: geo.lat, lng: geo.lng, accuracy: geo.accuracy },
+      ),
     }),
+  fence: (courseId: string) => request<{ fence: Fence | null }>(`/api/courses/${courseId}/fence`),
+  setFence: (courseId: string, fence: Fence) =>
+    request<{ fence: Fence }>(`/api/courses/${courseId}/fence`, {
+      method: "PUT",
+      body: JSON.stringify(fence),
+    }),
+  submissions: (courseId: string, questionId?: string) => {
+    const q = questionId ? `?questionId=${encodeURIComponent(questionId)}` : "";
+    return request<{ submissions: SubmissionDot[] }>(`/api/courses/${courseId}/submissions${q}`);
+  },
 };

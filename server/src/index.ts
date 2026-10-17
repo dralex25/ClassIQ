@@ -14,7 +14,8 @@ import {
   type AuthedRequest,
 } from "./auth.js";
 import { randomJoinCode } from "./join-code.js";
-import type { Course, MeResponse, Question, RosterStudent } from "../../shared/contract.js";
+import type { Course, Fence, MeResponse, Question, RosterStudent, SubmissionDot } from "../../shared/contract.js";
+import { DEFAULT_FENCE_RADIUS_M } from "../../shared/geo.js";
 import { parseQuestionBody, questionFromRow } from "./questions.js";
 import { attachLive, broadcastToCourse, buildSnapshot, courseIdForUser, pushSnapshot } from "./live.js";
 
@@ -438,10 +439,20 @@ app.post(
       res.status(404).json({ error: "Question not found" });
       return;
     }
-    await pool.query(
-      `UPDATE courses SET live_question_id = $2, live_opened_at = now() WHERE id = $1`,
-      [courseId, questionId],
-    );
+    const fence = parseFence(req.body?.fence);
+    if (fence) {
+      await pool.query(
+        `UPDATE courses SET live_question_id = $2, live_opened_at = now(),
+          fence_lat = $3, fence_lng = $4, fence_radius_m = $5
+         WHERE id = $1`,
+        [courseId, questionId, fence.lat, fence.lng, fence.radiusM],
+      );
+    } else {
+      await pool.query(
+        `UPDATE courses SET live_question_id = $2, live_opened_at = now() WHERE id = $1`,
+        [courseId, questionId],
+      );
+    }
     const snapshot = await buildSnapshot(courseId);
     broadcastToCourse(courseId, snapshot);
     res.json(snapshot);
@@ -469,6 +480,120 @@ app.post(
     res.json(event);
   },
 );
+
+function parseFence(raw: unknown): Fence | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as { lat?: unknown; lng?: unknown; radiusM?: unknown };
+  if (typeof o.lat !== "number" || typeof o.lng !== "number" || !Number.isFinite(o.lat) || !Number.isFinite(o.lng)) {
+    return null;
+  }
+  const radius = typeof o.radiusM === "number" && Number.isFinite(o.radiusM) ? o.radiusM : DEFAULT_FENCE_RADIUS_M;
+  return {
+    lat: o.lat,
+    lng: o.lng,
+    radiusM: Math.min(800, Math.max(20, radius)),
+  };
+}
+
+function parseGeo(body: unknown): { lat: number | null; lng: number | null; accuracy: number | null; noLocation: boolean } {
+  if (!body || typeof body !== "object") {
+    return { lat: null, lng: null, accuracy: null, noLocation: true };
+  }
+  const o = body as { lat?: unknown; lng?: unknown; accuracy?: unknown; noLocation?: unknown };
+  if (o.noLocation === true) {
+    return { lat: null, lng: null, accuracy: null, noLocation: true };
+  }
+  if (typeof o.lat === "number" && typeof o.lng === "number" && Number.isFinite(o.lat) && Number.isFinite(o.lng)) {
+    const accuracy = typeof o.accuracy === "number" && Number.isFinite(o.accuracy) ? o.accuracy : null;
+    return { lat: o.lat, lng: o.lng, accuracy, noLocation: false };
+  }
+  return { lat: null, lng: null, accuracy: null, noLocation: true };
+}
+
+app.get("/api/courses/:id/fence", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = String(req.params.id);
+  if (!(await requireOwnedCourse(user.id, courseId))) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
+  const row = await pool.query<{
+    fence_lat: number | null;
+    fence_lng: number | null;
+    fence_radius_m: number | null;
+  }>(`SELECT fence_lat, fence_lng, fence_radius_m FROM courses WHERE id = $1`, [courseId]);
+  const r = row.rows[0];
+  const fence =
+    r && r.fence_lat != null && r.fence_lng != null
+      ? { lat: r.fence_lat, lng: r.fence_lng, radiusM: r.fence_radius_m ?? DEFAULT_FENCE_RADIUS_M }
+      : null;
+  res.json({ fence });
+});
+
+app.put("/api/courses/:id/fence", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = String(req.params.id);
+  if (!(await requireOwnedCourse(user.id, courseId))) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
+  const fence = parseFence(req.body);
+  if (!fence) {
+    res.status(400).json({ error: "lat, lng, and radiusM are required" });
+    return;
+  }
+  await pool.query(
+    `UPDATE courses SET fence_lat = $2, fence_lng = $3, fence_radius_m = $4 WHERE id = $1`,
+    [courseId, fence.lat, fence.lng, fence.radiusM],
+  );
+  await pushSnapshot(courseId);
+  res.json({ fence });
+});
+
+app.get("/api/courses/:id/submissions", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = String(req.params.id);
+  if (!(await requireOwnedCourse(user.id, courseId))) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
+  const questionId =
+    typeof req.query.questionId === "string"
+      ? req.query.questionId
+      : (
+          await pool.query<{ live_question_id: string | null }>(
+            `SELECT live_question_id FROM courses WHERE id = $1`,
+            [courseId],
+          )
+        ).rows[0]?.live_question_id;
+  if (!questionId) {
+    res.json({ submissions: [] as SubmissionDot[] });
+    return;
+  }
+  const result = await pool.query(
+    `SELECT s.question_id, s.user_id, s.choice_id, s.submitted_at, s.lat, s.lng, s.accuracy, s.no_location,
+            u.name, u.student_id, u.email
+     FROM submissions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.course_id = $1 AND s.question_id = $2
+     ORDER BY s.submitted_at`,
+    [courseId, questionId],
+  );
+  const submissions: SubmissionDot[] = result.rows.map((row) => ({
+    questionId: row.question_id,
+    userId: row.user_id,
+    choiceId: row.choice_id,
+    submittedAt: row.submitted_at.toISOString(),
+    lat: row.lat,
+    lng: row.lng,
+    accuracy: row.accuracy,
+    noLocation: row.no_location,
+    name: row.name,
+    studentId: row.student_id,
+    email: row.email,
+  }));
+  res.json({ submissions });
+});
 
 app.post("/api/submit", requireAuth, requireRole("student"), async (req, res) => {
   const user = (req as AuthedRequest).user;
@@ -500,13 +625,15 @@ app.post("/api/submit", requireAuth, requireRole("student"), async (req, res) =>
     res.status(400).json({ error: "Invalid choice" });
     return;
   }
+  const geo = parseGeo(req.body);
   const saved = await pool.query<{ submitted_at: Date }>(
-    `INSERT INTO submissions (question_id, user_id, course_id, choice_id)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO submissions (question_id, user_id, course_id, choice_id, lat, lng, accuracy, no_location)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (question_id, user_id)
-     DO UPDATE SET choice_id = EXCLUDED.choice_id, submitted_at = now()
+     DO UPDATE SET choice_id = EXCLUDED.choice_id, submitted_at = now(),
+       lat = EXCLUDED.lat, lng = EXCLUDED.lng, accuracy = EXCLUDED.accuracy, no_location = EXCLUDED.no_location
      RETURNING submitted_at`,
-    [questionId, user.id, courseId, choiceId],
+    [questionId, user.id, courseId, choiceId, geo.lat, geo.lng, geo.accuracy, geo.noLocation],
   );
   await pushSnapshot(courseId);
   res.json({

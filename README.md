@@ -1,6 +1,6 @@
 # ClassIQ
 
-Dummy-auth lecture shell through **slice 3**: login, join, roster, teacher **Plan** (MC), teacher **Present** (live question + WebSocket), student submit popup. No GPS, map, banner, CSV, Google auth, or paywall.
+Dummy-auth lecture shell through **slice 4**: login, join, roster, Plan, Present, student submit, **geolocation pings**, teacher **fence map**, student **warning banner** (submit never blocked). No CSV, Google auth, or paywall.
 
 **Duplicate submits:** last write wins (same student + question upserts the choice and `submitted_at`).
 
@@ -78,6 +78,18 @@ WebSocket lives on the same Node process (`/ws`, proxied by Vite in dev).
 5. Students pick a choice → **Submit**. Teacher count ticks up (“N submitted”). Submit again: last write wins.
 6. Teacher **Close** — overlays disappear; waiting returns.
 
+## Try the map fence (slice 4)
+
+Presence is classified **on the teacher map**, not by a server 403. HTTPS (or localhost) is required for real GPS. On this cloud VM, use `mockGeo` so two students can plot in-room vs dorm:
+
+1. Teacher → **Present**. Click the map to pin the room (Boston tiles are the default view). Drag **radius** (~150 m). Optional: **Use my GPS**.
+2. Student A (in-room): http://localhost:5173/?mockGeo=42.3601,-71.0589,12 — sign in as `student@classiq.local`.
+3. Student B (dorm): http://localhost:5173/?mockGeo=42.3736,-71.1097,25 — `student2@classiq.local`.
+4. Teacher **Start**. Both pop the MC. Student B should see an outside/uncertain **banner**; Submit stays enabled.
+5. Both submit. Map dots: teal in, red out, gold uncertain, gray counts no-location. Reload keeps pin/radius (Postgres).
+
+Waiting screen pings once; overlay open pings; submit pings again (`enableHighAccuracy`).
+
 ## API
 
 Slice 1:
@@ -111,7 +123,15 @@ Slice 3 (Present + submit):
 | `GET` | `/api/courses/:id/live` | member |
 | `POST` | `/api/courses/:id/present/open` | teacher |
 | `POST` | `/api/courses/:id/present/close` | teacher |
-| `POST` | `/api/submit` | student |
+| `POST` | `/api/submit` | student (optional lat/lng/accuracy or `noLocation`; never rejected for geo) |
 | WS | `/ws` | session; room = course |
 
-Shared types live in `shared/contract.ts` (`User`, `Course`, `JoinCode`, `Question`, `LectureEvent`, `Submission`).
+Slice 4 (fence + logged pings):
+
+| Method | Path | Who |
+| --- | --- | --- |
+| `GET` | `/api/courses/:id/fence` | teacher |
+| `PUT` | `/api/courses/:id/fence` | teacher |
+| `GET` | `/api/courses/:id/submissions` | teacher |
+
+Shared types live in `shared/contract.ts` and `shared/geo.ts`. Presence buckets: in / out / uncertain / no-location.
