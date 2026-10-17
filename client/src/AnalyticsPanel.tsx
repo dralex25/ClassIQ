@@ -42,7 +42,7 @@ export function AnalyticsPanel({ courseId }: { courseId: string }) {
     return map;
   }, [question, rows]);
 
-  const max = Math.max(1, ...counts.values());
+  const max = Math.max(1, ...[...counts.values()]);
 
   function bucketFor(row: SubmissionDot): PresenceBucket {
     const ping =

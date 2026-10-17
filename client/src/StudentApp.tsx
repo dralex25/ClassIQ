@@ -49,8 +49,9 @@ export function StudentApp({
 }
 
 function Classroom({ me }: { me: MeResponse & { course: Course } }) {
-  const live = useLive();
+  const { event: live } = useLive(me.course.id);
   const open = live?.type === "question_open" ? live : null;
+  const choices = open && Array.isArray(open.question.choices) ? open.question.choices : [];
   const [choiceId, setChoiceId] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
   const [savedChoice, setSavedChoice] = useState<string | null>(null);
@@ -126,7 +127,7 @@ function Classroom({ me }: { me: MeResponse & { course: Course } }) {
           <div className="card modal">
             <h2 id="live-q">{open.question.stem}</h2>
             <form onSubmit={submit}>
-              {open.question.choices.map((c) => (
+              {choices.map((c) => (
                 <label key={c.id} className="choice-option">
                   <input
                     type="radio"

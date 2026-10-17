@@ -7,7 +7,7 @@ export function PresentPanel({ courseId }: { courseId: string }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [picked, setPicked] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const live = useLive();
+  const { event: live, apply } = useLive(courseId);
 
   useEffect(() => {
     api
@@ -20,11 +20,17 @@ export function PresentPanel({ courseId }: { courseId: string }) {
   }, [courseId]);
 
   const open = live?.type === "question_open" ? live : null;
+  const choices = open && Array.isArray(open.question.choices) ? open.question.choices : [];
 
-  async function start() {
+  async function start(questionId = picked) {
+    if (!questionId) return;
     setError(null);
     try {
-      await api.openQuestion(courseId, picked);
+      if (live?.type === "question_open") {
+        apply(await api.closeQuestion(courseId));
+      }
+      apply(await api.openQuestion(courseId, questionId));
+      setPicked(questionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start");
     }
@@ -33,7 +39,7 @@ export function PresentPanel({ courseId }: { courseId: string }) {
   async function closeQ() {
     setError(null);
     try {
-      await api.closeQuestion(courseId);
+      apply(await api.closeQuestion(courseId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not close");
     }
@@ -61,7 +67,7 @@ export function PresentPanel({ courseId }: { courseId: string }) {
                 ))}
               </select>
               <div className="row">
-                <button type="button" onClick={start} disabled={!picked}>
+                <button type="button" onClick={() => void start()} disabled={!picked}>
                   Start
                 </button>
               </div>
@@ -73,13 +79,25 @@ export function PresentPanel({ courseId }: { courseId: string }) {
         <div className="board">
           <p className="hint teacher-chrome">
             {open.submitCount} submitted
+            <select
+              aria-label="Switch question"
+              value={open.question.id}
+              onChange={(e) => void start(e.target.value)}
+              style={{ width: "auto", marginLeft: 12 }}
+            >
+              {questions.map((q, i) => (
+                <option key={q.id} value={q.id}>
+                  Q{i + 1}. {q.stem}
+                </option>
+              ))}
+            </select>
             <button type="button" className="secondary" style={{ marginLeft: 12 }} onClick={closeQ}>
               Close
             </button>
           </p>
           <h2 className="board-stem">{open.question.stem}</h2>
           <ol className="board-choices">
-            {open.question.choices.map((c) => (
+            {choices.map((c) => (
               <li key={c.id}>
                 <strong>{c.id}.</strong> {c.text}
               </li>
