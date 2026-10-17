@@ -1,4 +1,10 @@
-import type { Course, MeResponse, RosterStudent } from "@shared/contract";
+import type { Course, MeResponse, Question, RosterStudent } from "@shared/contract";
+
+export type QuestionInput = {
+  stem: string;
+  choices: string[];
+  correctIndex: number;
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -44,5 +50,24 @@ export const api = {
     request<{ course: Course }>("/api/join", {
       method: "POST",
       body: JSON.stringify({ joinCode }),
+    }),
+  questions: (courseId: string) =>
+    request<{ questions: Question[] }>(`/api/courses/${courseId}/questions`),
+  createQuestion: (courseId: string, input: QuestionInput) =>
+    request<{ question: Question }>(`/api/courses/${courseId}/questions`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateQuestion: (id: string, input: QuestionInput) =>
+    request<{ question: Question }>(`/api/questions/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  deleteQuestion: (id: string) =>
+    request<{ ok: boolean }>(`/api/questions/${id}`, { method: "DELETE" }),
+  reorderQuestions: (courseId: string, ids: string[]) =>
+    request<{ questions: Question[] }>(`/api/courses/${courseId}/questions/reorder`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
     }),
 };

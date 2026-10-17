@@ -1,6 +1,6 @@
 # ClassIQ
 
-Dummy-auth lecture shell (slice 1): teacher + student login, one course, join code/link, waiting room, teacher roster. No questions, Present, GPS, CSV, Google auth, or paywall.
+Dummy-auth lecture shell through **slice 2**: teacher + student login, one course, join code/link, waiting room, roster, and teacher **Plan** (multiple-choice questions). No Present, GPS, CSV, Google auth, paywall, LaTeX, or image upload yet.
 
 ## Local run
 
@@ -56,7 +56,17 @@ Seeded by `npm run db:migrate`:
 
 You can also register extra dummy accounts from the sign-in screen.
 
-## Slice 1 API
+## Try Plan (slice 2)
+
+1. Sign in as the teacher at http://localhost:5173.
+2. **Plan** is the default tab. Add a question: stem, 2–6 choices, mark the correct one. Save.
+3. Edit, reorder with Up/Down, add another question.
+4. Reload the page — the list is still there (Postgres).
+5. Student browser stays on **Waiting for the instructor** (no quiz list yet).
+
+## API
+
+Slice 1:
 
 | Method | Path | Who |
 | --- | --- | --- |
@@ -70,4 +80,14 @@ You can also register extra dummy accounts from the sign-in screen.
 | `GET` | `/api/join/:code` | session |
 | `POST` | `/api/join` | student |
 
-Shared types live in `shared/contract.ts` (`User`, `Course`, `JoinCode`).
+Slice 2 (teacher Plan):
+
+| Method | Path | Who |
+| --- | --- | --- |
+| `GET` | `/api/courses/:id/questions` | teacher |
+| `POST` | `/api/courses/:id/questions` | teacher |
+| `PUT` | `/api/questions/:id` | teacher |
+| `DELETE` | `/api/questions/:id` | teacher |
+| `POST` | `/api/courses/:id/questions/reorder` | teacher |
+
+Shared types live in `shared/contract.ts` (`User`, `Course`, `JoinCode`, `Question`).

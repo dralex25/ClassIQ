@@ -66,6 +66,63 @@ label {
   margin: 12px 0 6px;
 }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #101920;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.plan-list {
+  padding-left: 1.2rem;
+}
+
+.plan-item {
+  margin-bottom: 12px;
+}
+
+.plan-list li.editing {
+  outline: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.correct-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 2.4rem;
+  color: var(--ink);
+}
+
+.correct-pick input {
+  width: auto;
+}
+
+.plan-form {
+  margin-top: 20px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
 input,
 select {
   width: 100%;

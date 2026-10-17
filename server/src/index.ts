@@ -13,7 +13,8 @@ import {
   type AuthedRequest,
 } from "./auth.js";
 import { randomJoinCode } from "./join-code.js";
-import type { Course, MeResponse, RosterStudent } from "../../shared/contract.js";
+import type { Course, MeResponse, Question, RosterStudent } from "../../shared/contract.js";
+import { parseQuestionBody, questionFromRow } from "./questions.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -27,7 +28,7 @@ if (clientOrigin) {
     res.setHeader("Access-Control-Allow-Origin", clientOrigin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
       return;
@@ -245,6 +246,156 @@ app.get("/api/join/:code", requireAuth, async (req, res) => {
   }
   res.json({ course: courseFromRow(result.rows[0]) });
 });
+
+async function requireOwnedCourse(teacherId: string, courseId: string) {
+  const owned = await pool.query(
+    `SELECT id FROM courses WHERE id = $1 AND teacher_id = $2`,
+    [courseId, teacherId],
+  );
+  return (owned.rowCount ?? 0) > 0;
+}
+
+app.get(
+  "/api/courses/:id/questions",
+  requireAuth,
+  requireRole("teacher"),
+  async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    const courseId = String(req.params.id);
+    if (!(await requireOwnedCourse(user.id, courseId))) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const result = await pool.query(
+      `SELECT id, course_id, stem, choices, correct_choice_id, position
+       FROM questions WHERE course_id = $1 ORDER BY position, created_at`,
+      [courseId],
+    );
+    const questions: Question[] = result.rows.map(questionFromRow);
+    res.json({ questions });
+  },
+);
+
+app.post(
+  "/api/courses/:id/questions",
+  requireAuth,
+  requireRole("teacher"),
+  async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    const courseId = String(req.params.id);
+    if (!(await requireOwnedCourse(user.id, courseId))) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const parsed = parseQuestionBody(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const pos = await pool.query<{ n: number }>(
+      `SELECT COALESCE(MAX(position), -1) + 1 AS n FROM questions WHERE course_id = $1`,
+      [courseId],
+    );
+    const result = await pool.query(
+      `INSERT INTO questions (course_id, stem, choices, correct_choice_id, position)
+       VALUES ($1, $2, $3::jsonb, $4, $5)
+       RETURNING id, course_id, stem, choices, correct_choice_id, position`,
+      [courseId, parsed.stem, JSON.stringify(parsed.choices), parsed.correctChoiceId, pos.rows[0].n],
+    );
+    res.status(201).json({ question: questionFromRow(result.rows[0]) });
+  },
+);
+
+app.put("/api/questions/:id", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const found = await pool.query(
+    `SELECT q.id, q.course_id FROM questions q
+     JOIN courses c ON c.id = q.course_id
+     WHERE q.id = $1 AND c.teacher_id = $2`,
+    [String(req.params.id), user.id],
+  );
+  if (found.rowCount === 0) {
+    res.status(404).json({ error: "Question not found" });
+    return;
+  }
+  const parsed = parseQuestionBody(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  const result = await pool.query(
+    `UPDATE questions
+     SET stem = $2, choices = $3::jsonb, correct_choice_id = $4, updated_at = now()
+     WHERE id = $1
+     RETURNING id, course_id, stem, choices, correct_choice_id, position`,
+    [String(req.params.id), parsed.stem, JSON.stringify(parsed.choices), parsed.correctChoiceId],
+  );
+  res.json({ question: questionFromRow(result.rows[0]) });
+});
+
+app.delete("/api/questions/:id", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const found = await pool.query(
+    `SELECT q.id FROM questions q
+     JOIN courses c ON c.id = q.course_id
+     WHERE q.id = $1 AND c.teacher_id = $2`,
+    [String(req.params.id), user.id],
+  );
+  if (found.rowCount === 0) {
+    res.status(404).json({ error: "Question not found" });
+    return;
+  }
+  await pool.query(`DELETE FROM questions WHERE id = $1`, [String(req.params.id)]);
+  res.json({ ok: true });
+});
+
+app.post(
+  "/api/courses/:id/questions/reorder",
+  requireAuth,
+  requireRole("teacher"),
+  async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    const courseId = String(req.params.id);
+    if (!(await requireOwnedCourse(user.id, courseId))) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((id: unknown) => typeof id === "string")
+      : [];
+    const existing = await pool.query<{ id: string }>(
+      `SELECT id FROM questions WHERE course_id = $1`,
+      [courseId],
+    );
+    const have = new Set(existing.rows.map((r) => r.id));
+    if (ids.length !== have.size || ids.some((id: string) => !have.has(id))) {
+      res.status(400).json({ error: "Reorder must include every question id exactly once" });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (let i = 0; i < ids.length; i++) {
+        await client.query(`UPDATE questions SET position = $2, updated_at = now() WHERE id = $1`, [
+          ids[i],
+          i,
+        ]);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+    const result = await pool.query(
+      `SELECT id, course_id, stem, choices, correct_choice_id, position
+       FROM questions WHERE course_id = $1 ORDER BY position, created_at`,
+      [courseId],
+    );
+    res.json({ questions: result.rows.map(questionFromRow) });
+  },
+);
 
 app.post("/api/join", requireAuth, requireRole("student"), async (req, res) => {
   const user = (req as AuthedRequest).user;

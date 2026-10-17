@@ -36,6 +36,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS questions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  stem TEXT NOT NULL,
+  choices JSONB NOT NULL,
+  correct_choice_id TEXT NOT NULL,
+  position INT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS questions_course_position_idx ON questions(course_id, position);
 `;
 
 const DEMO_PASSWORD = "password";
