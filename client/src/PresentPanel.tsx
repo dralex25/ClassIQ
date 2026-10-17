@@ -3,7 +3,13 @@ import { api } from "./api";
 import { useLive } from "./useLive";
 import type { Question } from "@shared/contract";
 
-export function PresentPanel({ courseId }: { courseId: string }) {
+export function PresentPanel({
+  courseId,
+  onViewAnalytics,
+}: {
+  courseId: string;
+  onViewAnalytics?: () => void;
+}) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [picked, setPicked] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -91,10 +97,11 @@ export function PresentPanel({ courseId }: { courseId: string }) {
                 </option>
               ))}
             </select>
-            <button type="button" className="secondary" style={{ marginLeft: 12 }} onClick={closeQ}>
-              Close
+            <button type="button" className="secondary" style={{ marginLeft: 12 }} onClick={() => void closeQ()}>
+              End presenting
             </button>
           </p>
+          <p className="status-pill live">Accepting responses</p>
           <h2 className="board-stem">{open.question.stem}</h2>
           <ol className="board-choices">
             {choices.map((c) => (
@@ -104,6 +111,30 @@ export function PresentPanel({ courseId }: { courseId: string }) {
             ))}
           </ol>
           {error && <p className="error">{error}</p>}
+        </div>
+      )}
+      {live?.type === "question_closed" && live.compiled && (
+        <div style={{ marginTop: 16 }}>
+          <h3>Presenting ended</h3>
+          <p className="hint">
+            Responses are locked. Compiled {live.compiled.total} answer
+            {live.compiled.total === 1 ? "" : "s"}
+            {live.question ? ` for “${live.question.stem}”` : ""}.
+          </p>
+          <ul className="plan-list">
+            {live.compiled.byChoice.map((c) => (
+              <li key={c.id}>
+                <strong>{c.id}.</strong> {c.text} — {c.count}
+              </li>
+            ))}
+          </ul>
+          {onViewAnalytics && (
+            <div className="row">
+              <button type="button" onClick={onViewAnalytics}>
+                Review answers
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

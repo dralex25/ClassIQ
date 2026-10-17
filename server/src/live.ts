@@ -48,6 +48,7 @@ export async function buildSnapshot(courseId: string): Promise<LectureEvent> {
     question: toPublicQuestion(questionFromRow(q.rows[0])),
     openedAt: row.live_opened_at.toISOString(),
     submitCount: await submitCount(row.live_question_id),
+    accepting: true,
   };
 }
 

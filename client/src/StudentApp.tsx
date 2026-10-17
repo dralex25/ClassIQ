@@ -121,10 +121,18 @@ function Classroom({ me }: { me: MeResponse & { course: Course } }) {
             Answer saved — open question
           </button>
         )}
+        {live?.type === "question_closed" && live.question && (
+          <div className="closed-card">
+            <span className="status-pill closed">[CLOSED]</span>
+            <h3>{live.question.stem}</h3>
+            <p className="hint">This question is locked. Further responses are not accepted.</p>
+          </div>
+        )}
       </div>
       {showModal && open && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="live-q">
           <div className="card modal">
+            <p className="status-pill live">Accepting responses</p>
             <h2 id="live-q">{open.question.stem}</h2>
             <form onSubmit={submit}>
               {choices.map((c) => (
@@ -224,7 +232,9 @@ function GradeRow({ item }: { item: GradebookItem }) {
       <div>
         <p className="grade-when">
           {new Date(item.openedAt).toLocaleString()}
-          {item.live ? " · Live" : item.closedAt ? "" : ""}
+          <span className={`status-pill ${item.live ? "live" : "closed"}`}>
+            {item.live ? "Accepting responses" : "[CLOSED]"}
+          </span>
         </p>
         <strong>{item.stem}</strong>
         <p className="hint">
