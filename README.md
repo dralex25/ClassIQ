@@ -76,7 +76,7 @@ WebSocket lives on the same Node process (`/ws`, proxied by Vite in dev).
 3. **Student B** — `student2@classiq.local` / `password` (or register another student and join AME341A).
 4. Teacher: pick a planned MC (seed includes “What is 2 + 2?”) → **Start**. Board shows stem + choices. Both student Classroom screens pop the same modal.
 5. Students pick a choice → **Submit**. A ✓ appears; they can **Close** the modal and reopen it to change the answer. Last write wins. Teacher count ticks up.
-6. Teacher **Close** — overlays disappear. Students open **Gradebook** for auto-scored items (1/1 ✓, 0/1 ✗, or no submission).
+6. Teacher **Close** — overlays disappear. Students open **Gradebook** for auto-scored items (1/1 ✓, 0/1 ✗, or no submission). Prior answers also remain on `GET /api/me/history`.
 7. Teacher **Analytics** → **Export CSV** for answers + presence.
 
 ## Geofence (Plan) and Analytics
@@ -101,6 +101,7 @@ Slice 1:
 | `POST` | `/api/auth/login` | anyone |
 | `POST` | `/api/auth/logout` | session |
 | `GET` | `/api/me` | session |
+| `GET` | `/api/me/history` | student |
 | `POST` | `/api/courses` | teacher |
 | `GET` | `/api/courses/mine` | session |
 | `GET` | `/api/courses/:id/roster` | teacher |
@@ -139,6 +140,7 @@ Student gradebook / CSV:
 
 | Method | Path | Who |
 | --- | --- | --- |
+| `GET` | `/api/me/history` | student (own answers, no key) |
 | `GET` | `/api/me/gradebook` | student (presented items + auto-score) |
 | `GET` | `/api/courses/:id/export.csv` | teacher |
 

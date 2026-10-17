@@ -104,3 +104,12 @@ export type Gradebook = {
   possible: number;
   items: GradebookItem[];
 };
+
+/** Student's own answers — no other students, no answer key. */
+export type HistoryItem = {
+  questionId: string;
+  stem: string;
+  choiceId: string;
+  choiceText: string;
+  submittedAt: string;
+};

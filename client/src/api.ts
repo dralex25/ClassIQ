@@ -2,6 +2,7 @@ import type {
   Course,
   Fence,
   Gradebook,
+  HistoryItem,
   LectureEvent,
   MeResponse,
   Question,
@@ -108,6 +109,7 @@ export const api = {
     return request<{ submissions: SubmissionDot[] }>(`/api/courses/${courseId}/submissions${q}`);
   },
   gradebook: () => request<Gradebook>("/api/me/gradebook"),
+  history: () => request<{ history: HistoryItem[] }>("/api/me/history"),
   exportCsv: async (courseId: string) => {
     const res = await fetch(`/api/courses/${courseId}/export.csv`, { credentials: "include" });
     if (!res.ok) throw new Error("Export failed");

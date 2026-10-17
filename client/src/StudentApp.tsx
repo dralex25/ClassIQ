@@ -71,6 +71,20 @@ function Classroom({ me }: { me: MeResponse & { course: Course } }) {
     if (open) void pingLocation();
   }, [open?.question.id]);
 
+  useEffect(() => {
+    if (!open) return;
+    api
+      .history()
+      .then((r) => {
+        const mine = r.history.find((h) => h.questionId === open.question.id);
+        if (!mine) return;
+        setChoiceId(mine.choiceId);
+        setSaved(mine.submittedAt);
+        setSavedChoice(mine.choiceId);
+      })
+      .catch(() => undefined);
+  }, [open?.question.id]);
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!choiceId) return;
