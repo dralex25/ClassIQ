@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: classiq
+      POSTGRES_PASSWORD: classiq
+      POSTGRES_DB: classiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - classiq_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U classiq -d classiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  classiq_pg:
