@@ -1,6 +1,7 @@
 import type {
   Course,
   Fence,
+  Gradebook,
   LectureEvent,
   MeResponse,
   Question,
@@ -88,7 +89,7 @@ export const api = {
     request<LectureEvent>(`/api/courses/${courseId}/present/close`, { method: "POST" }),
   live: (courseId: string) => request<LectureEvent>(`/api/courses/${courseId}/live`),
   submit: (choiceId: string, geo: GeoPing) =>
-    request<{ ok: boolean; submittedAt: string; choiceId: string }>("/api/submit", {
+    request<{ ok: boolean; submittedAt: string; choiceId: string; correct: boolean | null }>("/api/submit", {
       method: "POST",
       body: JSON.stringify(
         "noLocation" in geo
@@ -105,5 +106,17 @@ export const api = {
   submissions: (courseId: string, questionId?: string) => {
     const q = questionId ? `?questionId=${encodeURIComponent(questionId)}` : "";
     return request<{ submissions: SubmissionDot[] }>(`/api/courses/${courseId}/submissions${q}`);
+  },
+  gradebook: () => request<Gradebook>("/api/me/gradebook"),
+  exportCsv: async (courseId: string) => {
+    const res = await fetch(`/api/courses/${courseId}/export.csv`, { credentials: "include" });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "classiq-answers.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   },
 };

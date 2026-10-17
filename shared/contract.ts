@@ -78,10 +78,29 @@ export type Submission = {
   lng: number | null;
   accuracy: number | null;
   noLocation: boolean;
+  correct: boolean | null;
 };
 
 export type SubmissionDot = Submission & {
   name: string;
   studentId: string | null;
   email: string;
+};
+
+export type GradebookItem = {
+  questionId: string;
+  stem: string;
+  openedAt: string;
+  closedAt: string | null;
+  live: boolean;
+  choiceId: string | null;
+  choiceText: string | null;
+  submittedAt: string | null;
+  correct: boolean | null;
+};
+
+export type Gradebook = {
+  scored: number;
+  possible: number;
+  items: GradebookItem[];
 };

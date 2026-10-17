@@ -56,6 +56,11 @@ export function AnalyticsPanel({ courseId }: { courseId: string }) {
     <div className="card">
       <h2>Analytics</h2>
       <p className="hint">Teacher-only. Students never see this table or the fence map.</p>
+      <div className="row">
+        <button type="button" className="secondary" onClick={() => void api.exportCsv(courseId)}>
+          Export CSV
+        </button>
+      </div>
       {questions.length === 0 ? (
         <p className="hint">No questions yet.</p>
       ) : (

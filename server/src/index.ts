@@ -14,8 +14,17 @@ import {
   type AuthedRequest,
 } from "./auth.js";
 import { randomJoinCode } from "./join-code.js";
-import type { Course, Fence, MeResponse, Question, RosterStudent, SubmissionDot } from "../../shared/contract.js";
-import { DEFAULT_FENCE_RADIUS_M } from "../../shared/geo.js";
+import type {
+  Course,
+  Fence,
+  Gradebook,
+  GradebookItem,
+  MeResponse,
+  Question,
+  RosterStudent,
+  SubmissionDot,
+} from "../../shared/contract.js";
+import { classifyPresence, DEFAULT_FENCE_RADIUS_M } from "../../shared/geo.js";
 import { parseQuestionBody, questionFromRow } from "./questions.js";
 import { attachLive, broadcastToCourse, buildSnapshot, courseIdForUser, pushSnapshot } from "./live.js";
 
@@ -453,6 +462,10 @@ app.post(
         [courseId, questionId],
       );
     }
+    await pool.query(
+      `INSERT INTO presented_items (course_id, question_id, opened_at) VALUES ($1, $2, now())`,
+      [courseId, questionId],
+    );
     const snapshot = await buildSnapshot(courseId);
     broadcastToCourse(courseId, snapshot);
     res.json(snapshot);
@@ -471,6 +484,11 @@ app.post(
       return;
     }
     const closedAt = new Date().toISOString();
+    await pool.query(
+      `UPDATE presented_items SET closed_at = now()
+       WHERE course_id = $1 AND closed_at IS NULL`,
+      [courseId],
+    );
     await pool.query(
       `UPDATE courses SET live_question_id = NULL, live_opened_at = NULL WHERE id = $1`,
       [courseId],
@@ -571,7 +589,7 @@ app.get("/api/courses/:id/submissions", requireAuth, requireRole("teacher"), asy
     return;
   }
   const result = await pool.query(
-    `SELECT s.question_id, s.user_id, s.choice_id, s.submitted_at, s.lat, s.lng, s.accuracy, s.no_location,
+    `SELECT s.question_id, s.user_id, s.choice_id, s.submitted_at, s.lat, s.lng, s.accuracy, s.no_location, s.is_correct,
             u.name, u.student_id, u.email
      FROM submissions s
      JOIN users u ON u.id = s.user_id
@@ -588,6 +606,7 @@ app.get("/api/courses/:id/submissions", requireAuth, requireRole("teacher"), asy
     lng: row.lng,
     accuracy: row.accuracy,
     noLocation: row.no_location,
+    correct: row.is_correct,
     name: row.name,
     studentId: row.student_id,
     email: row.email,
@@ -616,8 +635,8 @@ app.post("/api/submit", requireAuth, requireRole("student"), async (req, res) =>
     res.status(409).json({ error: "No question is open" });
     return;
   }
-  const q = await pool.query<{ choices: { id: string }[] }>(
-    `SELECT choices FROM questions WHERE id = $1`,
+  const q = await pool.query<{ choices: { id: string }[]; correct_choice_id: string }>(
+    `SELECT choices, correct_choice_id FROM questions WHERE id = $1`,
     [questionId],
   );
   const choices = q.rows[0]?.choices ?? [];
@@ -625,22 +644,138 @@ app.post("/api/submit", requireAuth, requireRole("student"), async (req, res) =>
     res.status(400).json({ error: "Invalid choice" });
     return;
   }
+  const isCorrect = choiceId === q.rows[0].correct_choice_id;
   const geo = parseGeo(req.body);
-  const saved = await pool.query<{ submitted_at: Date }>(
-    `INSERT INTO submissions (question_id, user_id, course_id, choice_id, lat, lng, accuracy, no_location)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  const saved = await pool.query<{ submitted_at: Date; is_correct: boolean | null }>(
+    `INSERT INTO submissions (question_id, user_id, course_id, choice_id, lat, lng, accuracy, no_location, is_correct)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (question_id, user_id)
      DO UPDATE SET choice_id = EXCLUDED.choice_id, submitted_at = now(),
-       lat = EXCLUDED.lat, lng = EXCLUDED.lng, accuracy = EXCLUDED.accuracy, no_location = EXCLUDED.no_location
-     RETURNING submitted_at`,
-    [questionId, user.id, courseId, choiceId, geo.lat, geo.lng, geo.accuracy, geo.noLocation],
+       lat = EXCLUDED.lat, lng = EXCLUDED.lng, accuracy = EXCLUDED.accuracy, no_location = EXCLUDED.no_location,
+       is_correct = EXCLUDED.is_correct
+     RETURNING submitted_at, is_correct`,
+    [questionId, user.id, courseId, choiceId, geo.lat, geo.lng, geo.accuracy, geo.noLocation, isCorrect],
   );
   await pushSnapshot(courseId);
   res.json({
     ok: true,
     choiceId,
     submittedAt: saved.rows[0].submitted_at.toISOString(),
+    correct: saved.rows[0].is_correct,
   });
+});
+
+app.get("/api/me/gradebook", requireAuth, requireRole("student"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = await courseIdForUser(user.id, user.role);
+  if (!courseId) {
+    const empty: Gradebook = { scored: 0, possible: 0, items: [] };
+    res.json(empty);
+    return;
+  }
+  const live = await pool.query<{ live_question_id: string | null }>(
+    `SELECT live_question_id FROM courses WHERE id = $1`,
+    [courseId],
+  );
+  const liveId = live.rows[0]?.live_question_id ?? null;
+  const result = await pool.query(
+    `SELECT p.question_id, p.opened_at, p.closed_at, q.stem, q.choices,
+            s.choice_id, s.submitted_at, s.is_correct
+     FROM presented_items p
+     JOIN questions q ON q.id = p.question_id
+     LEFT JOIN submissions s ON s.question_id = p.question_id AND s.user_id = $2
+     WHERE p.course_id = $1
+     ORDER BY p.opened_at DESC`,
+    [courseId, user.id],
+  );
+  const items: GradebookItem[] = result.rows.map((row) => {
+    const choices = typeof row.choices === "string" ? JSON.parse(row.choices) : row.choices;
+    const match = Array.isArray(choices)
+      ? choices.find((c: { id?: string; text?: string }) => c.id === row.choice_id)
+      : undefined;
+    return {
+      questionId: row.question_id,
+      stem: row.stem,
+      openedAt: row.opened_at.toISOString(),
+      closedAt: row.closed_at ? row.closed_at.toISOString() : null,
+      live: liveId === row.question_id && !row.closed_at,
+      choiceId: row.choice_id ?? null,
+      choiceText: typeof match?.text === "string" ? match.text : row.choice_id ?? null,
+      submittedAt: row.submitted_at ? row.submitted_at.toISOString() : null,
+      correct: row.is_correct ?? null,
+    };
+  });
+  const possible = items.length;
+  const scored = items.filter((i) => i.correct === true).length;
+  res.json({ scored, possible, items } satisfies Gradebook);
+});
+
+app.get("/api/courses/:id/export.csv", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = String(req.params.id);
+  if (!(await requireOwnedCourse(user.id, courseId))) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
+  const fenceRow = await pool.query<{
+    fence_lat: number | null;
+    fence_lng: number | null;
+    fence_radius_m: number | null;
+  }>(`SELECT fence_lat, fence_lng, fence_radius_m FROM courses WHERE id = $1`, [courseId]);
+  const fr = fenceRow.rows[0];
+  const fence =
+    fr && fr.fence_lat != null && fr.fence_lng != null
+      ? { lat: fr.fence_lat, lng: fr.fence_lng, radiusM: fr.fence_radius_m ?? DEFAULT_FENCE_RADIUS_M }
+      : null;
+  const result = await pool.query(
+    `SELECT u.name, u.student_id, u.email, q.stem, s.choice_id, s.is_correct, s.lat, s.lng, s.accuracy,
+            s.no_location, s.submitted_at
+     FROM submissions s
+     JOIN users u ON u.id = s.user_id
+     JOIN questions q ON q.id = s.question_id
+     WHERE s.course_id = $1
+     ORDER BY q.position, u.name`,
+    [courseId],
+  );
+  const header = [
+    "Name",
+    "Student ID",
+    "Email",
+    "Question",
+    "Choice",
+    "Correct",
+    "Lat",
+    "Lng",
+    "Accuracy",
+    "No location",
+    "Presence",
+    "Submitted at",
+  ];
+  const lines = [header.join(",")];
+  for (const row of result.rows) {
+    const ping = row.no_location || row.lat == null
+      ? { noLocation: true as const }
+      : { lat: row.lat, lng: row.lng, accuracy: row.accuracy ?? 9999 };
+    const presence = classifyPresence(ping, fence);
+    const cells = [
+      row.name,
+      row.student_id ?? "",
+      row.email,
+      row.stem,
+      row.choice_id,
+      row.is_correct === true ? "Y" : row.is_correct === false ? "N" : "",
+      row.lat ?? "",
+      row.lng ?? "",
+      row.accuracy ?? "",
+      row.no_location ? "Y" : "N",
+      presence,
+      row.submitted_at.toISOString(),
+    ].map((v) => `"${String(v).replaceAll('"', '""')}"`);
+    lines.push(cells.join(","));
+  }
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", "attachment; filename=classiq-answers.csv");
+  res.send(lines.join("\n"));
 });
 
 app.post("/api/join", requireAuth, requireRole("student"), async (req, res) => {
