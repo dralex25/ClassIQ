@@ -79,6 +79,12 @@ const DEMO_PASSWORD = "password";
 async function migrate() {
   await pool.query(SCHEMA);
 
+  if (process.env.SEED_DEMO === "false") {
+    console.log("Migration complete (demo seed skipped).");
+    await pool.end();
+    return;
+  }
+
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
   await pool.query(
