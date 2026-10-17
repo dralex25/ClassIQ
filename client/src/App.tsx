@@ -6,7 +6,7 @@ import { PlanPanel } from "./PlanPanel";
 import { PresentPanel } from "./PresentPanel";
 import { pingLocation } from "./pingLocation";
 import { useLive } from "./useLive";
-import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
+import type { Course, HistoryItem, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -378,18 +378,39 @@ function WaitingRoom({
   const open = live?.type === "question_open" ? live : null;
   const [choiceId, setChoiceId] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
+  const [savedChoice, setSavedChoice] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  function loadHistory() {
+    api.history().then((r) => setHistory(r.history)).catch(() => undefined);
+  }
+
   useEffect(() => {
     void pingLocation();
+    loadHistory();
   }, []);
 
   useEffect(() => {
     setChoiceId("");
     setSaved(null);
+    setSavedChoice(null);
+    setDismissed(false);
     setError(null);
     if (open) void pingLocation();
   }, [open?.question.id]);
+
+  useEffect(() => {
+    if (!open || !history.length) return;
+    const mine = history.find((h) => h.questionId === open.question.id);
+    if (mine && !saved) {
+      setChoiceId(mine.choiceId);
+      setSaved(mine.submittedAt);
+      setSavedChoice(mine.choiceId);
+    }
+  }, [open?.question.id, history, saved]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -400,12 +421,16 @@ function WaitingRoom({
       const geo = await pingLocation();
       const result = await api.submit(choiceId, geo);
       setSaved(result.submittedAt);
+      setSavedChoice(result.choiceId);
+      loadHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");
     } finally {
       setBusy(false);
     }
   }
+
+  const showModal = !!open && !dismissed;
 
   return (
     <div className="shell">
@@ -417,8 +442,39 @@ function WaitingRoom({
           You are in <strong>{me.course?.name}</strong>. A question popup will appear when class
           starts.
         </p>
+        {open && dismissed && saved && (
+          <button type="button" className="reopen" onClick={() => setDismissed(false)}>
+            <span className="saved-mark" aria-hidden>
+              ✓
+            </span>
+            Answer saved — open question
+          </button>
+        )}
       </div>
-      {open && (
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3>Your question history</h3>
+        {history.length === 0 ? (
+          <p className="hint">Answers you submit this class will show up here.</p>
+        ) : (
+          <ul className="history">
+            {history.map((item) => (
+              <li key={item.questionId}>
+                <span className="saved-mark" aria-hidden>
+                  ✓
+                </span>
+                <div>
+                  <strong>{item.stem}</strong>
+                  <p className="hint">
+                    {item.choiceId}. {item.choiceText} · {new Date(item.submittedAt).toLocaleTimeString()}
+                    {open?.question.id === item.questionId ? " · live" : ""}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {showModal && open && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="live-q">
           <div className="card modal">
             <h2 id="live-q">{open.question.stem}</h2>
@@ -439,14 +495,23 @@ function WaitingRoom({
               ))}
               {error && <p className="error">{error}</p>}
               {saved && (
-                <p className="hint">
-                  Saved {new Date(saved).toLocaleTimeString()} (you can change and submit again).
+                <p className="saved-line">
+                  <span className="saved-mark" aria-hidden>
+                    ✓
+                  </span>
+                  Saved {new Date(saved).toLocaleTimeString()}
+                  {savedChoice ? ` (${savedChoice})` : ""}. You can change it and submit again.
                 </p>
               )}
               <div className="row">
                 <button type="submit" disabled={!choiceId || busy}>
-                  Submit
+                  {saved ? "Update answer" : "Submit"}
                 </button>
+                {saved && (
+                  <button type="button" className="secondary" onClick={() => setDismissed(true)}>
+                    Close
+                  </button>
+                )}
               </div>
             </form>
           </div>

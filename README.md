@@ -75,8 +75,8 @@ WebSocket lives on the same Node process (`/ws`, proxied by Vite in dev).
 2. **Student A** — `student@classiq.local` / `password` (already in PHY101 after migrate).
 3. **Student B** — `student2@classiq.local` / `password` (or register another student and join PHY101).
 4. Teacher: pick a planned MC (seed includes “What is 2 + 2?”) → **Start**. Board shows stem + choices. Both student waiting screens pop the same modal.
-5. Students pick a choice → **Submit**. Teacher count ticks up (“N submitted”). Submit again: last write wins.
-6. Teacher **Close** — overlays disappear; waiting returns.
+5. Students pick a choice → **Submit**. A ✓ shows the answer is saved. They can **Close** the popup, see it in **Your question history**, and tap **Answer saved — open question** to change it (last write wins).
+6. Teacher **Close** — the live popup goes away; history remains.
 
 ## Geofence (Plan) and Analytics
 
@@ -100,6 +100,7 @@ Slice 1:
 | `POST` | `/api/auth/login` | anyone |
 | `POST` | `/api/auth/logout` | session |
 | `GET` | `/api/me` | session |
+| `GET` | `/api/me/history` | student |
 | `POST` | `/api/courses` | teacher |
 | `GET` | `/api/courses/mine` | session |
 | `GET` | `/api/courses/:id/roster` | teacher |

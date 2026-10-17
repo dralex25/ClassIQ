@@ -14,7 +14,15 @@ import {
   type AuthedRequest,
 } from "./auth.js";
 import { randomJoinCode } from "./join-code.js";
-import type { Course, Fence, MeResponse, Question, RosterStudent, SubmissionDot } from "../../shared/contract.js";
+import type {
+  Course,
+  Fence,
+  HistoryItem,
+  MeResponse,
+  Question,
+  RosterStudent,
+  SubmissionDot,
+} from "../../shared/contract.js";
 import { DEFAULT_FENCE_RADIUS_M } from "../../shared/geo.js";
 import { parseQuestionBody, questionFromRow } from "./questions.js";
 import { attachLive, broadcastToCourse, buildSnapshot, courseIdForUser, pushSnapshot } from "./live.js";
@@ -593,6 +601,37 @@ app.get("/api/courses/:id/submissions", requireAuth, requireRole("teacher"), asy
     email: row.email,
   }));
   res.json({ submissions });
+});
+
+app.get("/api/me/history", requireAuth, requireRole("student"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = await courseIdForUser(user.id, user.role);
+  if (!courseId) {
+    res.json({ history: [] as HistoryItem[] });
+    return;
+  }
+  const result = await pool.query(
+    `SELECT s.question_id, s.choice_id, s.submitted_at, q.stem, q.choices
+     FROM submissions s
+     JOIN questions q ON q.id = s.question_id
+     WHERE s.user_id = $1 AND s.course_id = $2
+     ORDER BY s.submitted_at DESC`,
+    [user.id, courseId],
+  );
+  const history: HistoryItem[] = result.rows.map((row) => {
+    const choices = typeof row.choices === "string" ? JSON.parse(row.choices) : row.choices;
+    const match = Array.isArray(choices)
+      ? choices.find((c: { id?: string; text?: string }) => c.id === row.choice_id)
+      : undefined;
+    return {
+      questionId: row.question_id,
+      stem: row.stem,
+      choiceId: row.choice_id,
+      choiceText: typeof match?.text === "string" ? match.text : row.choice_id,
+      submittedAt: row.submitted_at.toISOString(),
+    };
+  });
+  res.json({ history });
 });
 
 app.post("/api/submit", requireAuth, requireRole("student"), async (req, res) => {
