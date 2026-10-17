@@ -59,6 +59,17 @@ export type Fence = {
   radiusM: number;
 };
 
+export type CompiledChoice = {
+  id: string;
+  text: string;
+  count: number;
+};
+
+export type CompiledResults = {
+  total: number;
+  byChoice: CompiledChoice[];
+};
+
 export type LectureEvent =
   | { type: "waiting" }
   | {
@@ -66,8 +77,15 @@ export type LectureEvent =
       question: PublicQuestion;
       openedAt: string;
       submitCount: number;
+      accepting: true;
     }
-  | { type: "question_closed"; closedAt: string };
+  | {
+      type: "question_closed";
+      closedAt: string;
+      question: PublicQuestion | null;
+      submitCount: number;
+      compiled: CompiledResults;
+    };
 
 export type Submission = {
   questionId: string;
@@ -112,4 +130,25 @@ export type HistoryItem = {
   choiceId: string;
   choiceText: string;
   submittedAt: string;
+};
+
+export type StudentResponse = {
+  questionId: string;
+  stem: string;
+  openedAt: string;
+  closedAt: string | null;
+  live: boolean;
+  choiceId: string | null;
+  choiceText: string | null;
+  submittedAt: string | null;
+  correct: boolean | null;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  noLocation: boolean;
+};
+
+export type StudentProfile = {
+  student: RosterStudent;
+  items: StudentResponse[];
 };

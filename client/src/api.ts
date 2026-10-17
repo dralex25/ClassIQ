@@ -7,6 +7,7 @@ import type {
   MeResponse,
   Question,
   RosterStudent,
+  StudentProfile,
   SubmissionDot,
 } from "@shared/contract";
 import type { GeoPing } from "@shared/geo";
@@ -108,6 +109,8 @@ export const api = {
     const q = questionId ? `?questionId=${encodeURIComponent(questionId)}` : "";
     return request<{ submissions: SubmissionDot[] }>(`/api/courses/${courseId}/submissions${q}`);
   },
+  studentProfile: (courseId: string, studentId: string) =>
+    request<StudentProfile>(`/api/courses/${courseId}/students/${studentId}`),
   gradebook: () => request<Gradebook>("/api/me/gradebook"),
   history: () => request<{ history: HistoryItem[] }>("/api/me/history"),
   exportCsv: async (courseId: string) => {

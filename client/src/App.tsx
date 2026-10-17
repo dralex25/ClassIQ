@@ -5,6 +5,7 @@ import { AnalyticsPanel } from "./AnalyticsPanel";
 import { PlanPanel } from "./PlanPanel";
 import { PresentPanel } from "./PresentPanel";
 import { StudentApp } from "./StudentApp";
+import { StudentProfile } from "./StudentProfile";
 import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
@@ -197,6 +198,7 @@ function TeacherHome({
   const [tab, setTab] = useState<"plan" | "present" | "analytics" | "class">("present");
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me.course) return;
@@ -235,22 +237,62 @@ function TeacherHome({
       ) : (
         <>
           <div className="tabs">
-            <button type="button" className={tab === "plan" ? "" : "secondary"} onClick={() => setTab("plan")}>
+            <button
+              type="button"
+              className={tab === "plan" ? "" : "secondary"}
+              onClick={() => {
+                setTab("plan");
+                setProfileId(null);
+              }}
+            >
               Plan
             </button>
-            <button type="button" className={tab === "present" ? "" : "secondary"} onClick={() => setTab("present")}>
+            <button
+              type="button"
+              className={tab === "present" ? "" : "secondary"}
+              onClick={() => {
+                setTab("present");
+                setProfileId(null);
+              }}
+            >
               Present
             </button>
-            <button type="button" className={tab === "analytics" ? "" : "secondary"} onClick={() => setTab("analytics")}>
+            <button
+              type="button"
+              className={tab === "analytics" ? "" : "secondary"}
+              onClick={() => {
+                setTab("analytics");
+                setProfileId(null);
+              }}
+            >
               Analytics
             </button>
-            <button type="button" className={tab === "class" ? "" : "secondary"} onClick={() => setTab("class")}>
+            <button
+              type="button"
+              className={tab === "class" ? "" : "secondary"}
+              onClick={() => {
+                setTab("class");
+                setProfileId(null);
+              }}
+            >
               Class
             </button>
           </div>
+          {profileId ? (
+            <StudentProfile
+              courseId={me.course.id}
+              studentId={profileId}
+              onBack={() => setProfileId(null)}
+            />
+          ) : (
+            <>
           {tab === "plan" && <PlanPanel courseId={me.course.id} />}
-          {tab === "present" && <PresentPanel courseId={me.course.id} />}
-          {tab === "analytics" && <AnalyticsPanel courseId={me.course.id} />}
+          {tab === "present" && (
+            <PresentPanel courseId={me.course.id} onViewAnalytics={() => setTab("analytics")} />
+          )}
+          {tab === "analytics" && (
+            <AnalyticsPanel courseId={me.course.id} onOpenStudent={setProfileId} />
+          )}
           {tab === "class" && (
           <>
           <div className="card">
@@ -297,8 +339,16 @@ function TeacherHome({
                 </thead>
                 <tbody>
                   {roster.map((s) => (
-                    <tr key={s.id}>
-                      <td>{s.name}</td>
+                    <tr
+                      key={s.id}
+                      className="click-row"
+                      onClick={() => setProfileId(s.id)}
+                    >
+                      <td>
+                        <button type="button" className="linkish">
+                          {s.name}
+                        </button>
+                      </td>
                       <td>{s.studentId ?? "—"}</td>
                       <td>{s.email}</td>
                     </tr>
@@ -308,6 +358,8 @@ function TeacherHome({
             )}
           </div>
           </>
+          )}
+            </>
           )}
         </>
       )}

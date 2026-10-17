@@ -93,6 +93,27 @@ describe("ClassIQ API (running server)", () => {
 
     const closed = await teacher.request(`/api/courses/${courseId}/present/close`, { method: "POST" });
     expect(closed.status).toBe(200);
+    expect(closed.body).toMatchObject({
+      type: "question_closed",
+      submitCount: expect.any(Number),
+      compiled: { total: expect.any(Number), byChoice: expect.any(Array) },
+    });
+
+    const locked = await student.request("/api/submit", {
+      method: "POST",
+      body: JSON.stringify({ choiceId: question.correctChoiceId, noLocation: true }),
+    });
+    expect(locked.status).toBe(409);
+
+    const who = await student.request<{ user: { id: string } }>("/api/me");
+    const profile = await teacher.request(`/api/courses/${courseId}/students/${who.body.user.id}`);
+    expect(profile.status).toBe(200);
+    expect(profile.body).toMatchObject({
+      student: { email: STUDENT },
+      items: expect.any(Array),
+    });
+    const asStudent = await student.request(`/api/courses/${courseId}/students/${who.body.user.id}`);
+    expect(asStudent.status).toBe(403);
 
     const book = await student.request<{
       scored: number;

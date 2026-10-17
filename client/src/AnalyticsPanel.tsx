@@ -4,7 +4,13 @@ import { PresentMap } from "./PresentMap";
 import { classifyPresence, type Fence, type PresenceBucket } from "@shared/geo";
 import type { Question, SubmissionDot } from "@shared/contract";
 
-export function AnalyticsPanel({ courseId }: { courseId: string }) {
+export function AnalyticsPanel({
+  courseId,
+  onOpenStudent,
+}: {
+  courseId: string;
+  onOpenStudent?: (studentUserId: string) => void;
+}) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [questionId, setQuestionId] = useState("");
   const [rows, setRows] = useState<SubmissionDot[]>([]);
@@ -108,7 +114,15 @@ export function AnalyticsPanel({ courseId }: { courseId: string }) {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.userId}>
-                    <td>{row.name}</td>
+                    <td>
+                      {onOpenStudent ? (
+                        <button type="button" className="linkish" onClick={() => onOpenStudent(row.userId)}>
+                          {row.name}
+                        </button>
+                      ) : (
+                        row.name
+                      )}
+                    </td>
                     <td>{row.studentId ?? "—"}</td>
                     <td>
                       {row.choiceId}
@@ -121,9 +135,9 @@ export function AnalyticsPanel({ courseId }: { courseId: string }) {
               </tbody>
             </table>
           )}
-          <h3>Map</h3>
-          <p className="hint">Dots use the Plan geofence. Not shown in Present.</p>
-          <PresentMap fence={fence} dots={rows} />
+          <h3>All answer locations</h3>
+          <p className="hint">Each pin is a student submit. Click a pin to open that student’s profile.</p>
+          <PresentMap fence={fence} dots={rows} onDotClick={(dot) => onOpenStudent?.(dot.userId)} />
         </>
       )}
       {error && <p className="error">{error}</p>}

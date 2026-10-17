@@ -88,9 +88,9 @@ WebSocket lives on the same Node process (`/ws`, proxied by Vite in dev).
 2. **Student A** — `student@classiq.local` / `password` (already in AME341A after migrate).
 3. **Student B** — `student2@classiq.local` / `password` (or register another student and join AME341A).
 4. Teacher: pick a planned MC (seed includes “What is 2 + 2?”) → **Start**. Board shows stem + choices. Both student Classroom screens pop the same modal.
-5. Students pick a choice → **Submit**. A ✓ appears; they can **Close** the modal and reopen it to change the answer. Last write wins. Teacher count ticks up.
-6. Teacher **Close** — overlays disappear. Students open **Gradebook** for auto-scored items (1/1 ✓, 0/1 ✗, or no submission). Prior answers also remain on `GET /api/me/history`.
-7. Teacher **Analytics** → **Export CSV** for answers + presence.
+5. Students pick a choice → **Submit**. The live item is labeled **Accepting responses**. A ✓ appears; they can **Close** the modal and reopen it to change the answer. Last write wins. Teacher count ticks up.
+6. Teacher **End presenting** — submits lock, compiled counts appear. Students see **[CLOSED]** on the item (Classroom + Gradebook).
+7. Teacher **Class**: click a student for response history. Click a history row for that answer’s fence+pin map. **Analytics** map pins open the same student profile. **Export CSV** still available.
 
 ## Geofence (Plan) and Analytics
 
@@ -155,6 +155,7 @@ Student gradebook / CSV:
 | --- | --- | --- |
 | `GET` | `/api/me/history` | student (own answers, no key) |
 | `GET` | `/api/me/gradebook` | student (presented items + auto-score) |
+| `GET` | `/api/courses/:id/students/:studentId` | teacher (profile + response history + geo) |
 | `GET` | `/api/courses/:id/export.csv` | teacher |
 
 Shared types live in `shared/contract.ts` and `shared/geo.ts`. Presence buckets: in / out / uncertain / no-location. Gradebook possible points = presented questions; scored = correct submits.

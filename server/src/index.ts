@@ -23,11 +23,20 @@ import type {
   MeResponse,
   Question,
   RosterStudent,
+  StudentProfile,
+  StudentResponse,
   SubmissionDot,
 } from "../../shared/contract.js";
 import { classifyPresence, DEFAULT_FENCE_RADIUS_M } from "../../shared/geo.js";
 import { parseQuestionBody, questionFromRow } from "./questions.js";
-import { attachLive, broadcastToCourse, buildSnapshot, courseIdForUser, pushSnapshot } from "./live.js";
+import {
+  attachLive,
+  broadcastToCourse,
+  buildSnapshot,
+  courseIdForUser,
+  pushSnapshot,
+  submitCount,
+} from "./live.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -485,6 +494,23 @@ app.post(
       return;
     }
     const closedAt = new Date().toISOString();
+    const snap = await buildSnapshot(courseId);
+    const question = snap.type === "question_open" ? snap.question : null;
+    const questionId = question?.id;
+    const counts = questionId
+      ? await pool.query<{ choice_id: string; n: number }>(
+          `SELECT choice_id, COUNT(*)::int AS n FROM submissions WHERE question_id = $1 GROUP BY choice_id`,
+          [questionId],
+        )
+      : { rows: [] as { choice_id: string; n: number }[] };
+    const compiled = {
+      total: questionId ? await submitCount(questionId) : 0,
+      byChoice: (question?.choices ?? []).map((c) => ({
+        id: c.id,
+        text: c.text,
+        count: counts.rows.find((r) => r.choice_id === c.id)?.n ?? 0,
+      })),
+    };
     await pool.query(
       `UPDATE presented_items SET closed_at = now()
        WHERE course_id = $1 AND closed_at IS NULL`,
@@ -494,7 +520,13 @@ app.post(
       `UPDATE courses SET live_question_id = NULL, live_opened_at = NULL WHERE id = $1`,
       [courseId],
     );
-    const event = { type: "question_closed" as const, closedAt };
+    const event = {
+      type: "question_closed" as const,
+      closedAt,
+      question,
+      submitCount: compiled.total,
+      compiled,
+    };
     broadcastToCourse(courseId, event);
     res.json(event);
   },
@@ -613,6 +645,74 @@ app.get("/api/courses/:id/submissions", requireAuth, requireRole("teacher"), asy
     email: row.email,
   }));
   res.json({ submissions });
+});
+
+app.get("/api/courses/:id/students/:studentId", requireAuth, requireRole("teacher"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = String(req.params.id);
+  const studentId = String(req.params.studentId);
+  if (!(await requireOwnedCourse(user.id, courseId))) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
+  const member = await pool.query<{
+    id: string;
+    name: string;
+    email: string;
+    student_id: string | null;
+  }>(
+    `SELECT u.id, u.name, u.email, u.student_id
+     FROM users u
+     JOIN memberships m ON m.user_id = u.id
+     WHERE m.course_id = $1 AND u.id = $2 AND u.role = 'student'`,
+    [courseId, studentId],
+  );
+  if (member.rowCount === 0) {
+    res.status(404).json({ error: "Student not found" });
+    return;
+  }
+  const live = await pool.query<{ live_question_id: string | null }>(
+    `SELECT live_question_id FROM courses WHERE id = $1`,
+    [courseId],
+  );
+  const liveId = live.rows[0]?.live_question_id ?? null;
+  const result = await pool.query(
+    `SELECT p.question_id, p.opened_at, p.closed_at, q.stem, q.choices,
+            s.choice_id, s.submitted_at, s.is_correct, s.lat, s.lng, s.accuracy, s.no_location
+     FROM presented_items p
+     JOIN questions q ON q.id = p.question_id
+     LEFT JOIN submissions s ON s.question_id = p.question_id AND s.user_id = $2
+     WHERE p.course_id = $1
+     ORDER BY p.opened_at DESC`,
+    [courseId, studentId],
+  );
+  const items: StudentResponse[] = result.rows.map((row) => {
+    const choices = typeof row.choices === "string" ? JSON.parse(row.choices) : row.choices;
+    const match = Array.isArray(choices)
+      ? choices.find((c: { id?: string; text?: string }) => c.id === row.choice_id)
+      : undefined;
+    return {
+      questionId: row.question_id,
+      stem: row.stem,
+      openedAt: row.opened_at.toISOString(),
+      closedAt: row.closed_at ? row.closed_at.toISOString() : null,
+      live: liveId === row.question_id && !row.closed_at,
+      choiceId: row.choice_id ?? null,
+      choiceText: typeof match?.text === "string" ? match.text : row.choice_id ?? null,
+      submittedAt: row.submitted_at ? row.submitted_at.toISOString() : null,
+      correct: row.is_correct ?? null,
+      lat: row.lat ?? null,
+      lng: row.lng ?? null,
+      accuracy: row.accuracy ?? null,
+      noLocation: row.no_location ?? true,
+    };
+  });
+  const st = member.rows[0];
+  const profile: StudentProfile = {
+    student: { id: st.id, name: st.name, email: st.email, studentId: st.student_id },
+    items,
+  };
+  res.json(profile);
 });
 
 app.get("/api/me/history", requireAuth, requireRole("student"), async (req, res) => {

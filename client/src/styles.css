@@ -566,3 +566,68 @@ th {
 .grade-mark.bad {
   color: var(--danger);
 }
+
+.status-pill {
+  display: inline-block;
+  margin: 0 0 8px 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+.status-pill.live {
+  background: #1e4a43;
+  color: var(--accent);
+}
+
+.status-pill.closed {
+  background: #3a2424;
+  color: var(--danger);
+}
+
+.closed-card {
+  margin-top: 24px;
+  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  width: auto;
+}
+
+.click-row {
+  cursor: pointer;
+}
+
+.click-row:hover {
+  background: #1e2c36;
+}
+
+.history-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.history-hit.active {
+  border-color: var(--accent);
+  background: #1e2c36;
+}

@@ -15,16 +15,20 @@ export function PresentMap({
   fence,
   dots,
   onPin,
+  onDotClick,
 }: {
   fence: GeoFence | null;
   dots: SubmissionDot[];
   onPin?: (lat: number, lng: number) => void;
+  onDotClick?: (dot: SubmissionDot) => void;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const onPinRef = useRef(onPin);
+  const onDotClickRef = useRef(onDotClick);
   onPinRef.current = onPin;
+  onDotClickRef.current = onDotClick;
 
   useEffect(() => {
     const el = divRef.current;
@@ -82,7 +86,7 @@ export function PresentMap({
       if (dot.noLocation || dot.lat == null || dot.lng == null) continue;
       const ping = { lat: dot.lat, lng: dot.lng, accuracy: dot.accuracy ?? 9999 };
       const bucket = classifyPresence(ping, fence);
-      L.circleMarker([ping.lat, ping.lng], {
+      const marker = L.circleMarker([ping.lat, ping.lng], {
         radius: 8,
         color: "#0f1720",
         fillColor: COLORS[bucket],
@@ -91,8 +95,12 @@ export function PresentMap({
       })
         .bindTooltip(`${dot.name} · ${bucket}${dot.accuracy != null ? ` · ±${Math.round(dot.accuracy)}m` : ""}`)
         .addTo(layer);
+      marker.on("click", (ev) => {
+        L.DomEvent.stopPropagation(ev);
+        onDotClickRef.current?.(dot);
+      });
     }
-  }, [fence, dots]);
+  }, [fence, dots, onDotClick]);
 
   return <div ref={divRef} className="geo-map" />;
 }
