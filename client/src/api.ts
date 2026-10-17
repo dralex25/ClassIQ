@@ -1,4 +1,4 @@
-import type { Course, MeResponse, Question, RosterStudent } from "@shared/contract";
+import type { Course, LectureEvent, MeResponse, Question, RosterStudent } from "@shared/contract";
 
 export type QuestionInput = {
   stem: string;
@@ -69,5 +69,18 @@ export const api = {
     request<{ questions: Question[] }>(`/api/courses/${courseId}/questions/reorder`, {
       method: "POST",
       body: JSON.stringify({ ids }),
+    }),
+  openQuestion: (courseId: string, questionId: string) =>
+    request<LectureEvent>(`/api/courses/${courseId}/present/open`, {
+      method: "POST",
+      body: JSON.stringify({ questionId }),
+    }),
+  closeQuestion: (courseId: string) =>
+    request<LectureEvent>(`/api/courses/${courseId}/present/close`, { method: "POST" }),
+  live: (courseId: string) => request<LectureEvent>(`/api/courses/${courseId}/live`),
+  submit: (choiceId: string) =>
+    request<{ ok: boolean; submittedAt: string; choiceId: string }>("/api/submit", {
+      method: "POST",
+      body: JSON.stringify({ choiceId }),
     }),
 };
