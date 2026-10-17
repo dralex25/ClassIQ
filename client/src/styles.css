@@ -260,9 +260,48 @@ th {
   padding: 48px 16px;
 }
 
+.board-card {
+  min-height: 420px;
+}
+
+.board-stem {
+  font-size: 2rem;
+  margin: 12px 0 24px;
+}
+
 .board-choices {
-  font-size: 1.15rem;
-  line-height: 1.6;
+  font-size: 1.4rem;
+  line-height: 1.7;
+}
+
+.teacher-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.counts {
+  margin: 16px 0 24px;
+}
+
+.count-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  margin: 10px 0;
+}
+
+.bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  background: #101920;
+  border-radius: 99px;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
 }
 
 .modal-backdrop {
@@ -320,8 +359,8 @@ th {
   .code {
     font-size: 1.25rem;
   }
-  th:nth-child(3),
-  td:nth-child(3) {
+  .roster-table th:nth-child(3),
+  .roster-table td:nth-child(3) {
     display: none;
   }
 }

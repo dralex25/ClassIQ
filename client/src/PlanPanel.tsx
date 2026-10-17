@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { FenceSettings } from "./FenceSettings";
 import type { Question } from "@shared/contract";
 
 type Draft = {
@@ -99,11 +100,12 @@ export function PlanPanel({ courseId }: { courseId: string }) {
   }
 
   return (
+    <>
     <div className="card">
       <h2>Plan</h2>
       <p className="hint">
-        Multiple choice only. Mark the correct choice — students will not see the key until a later
-        slice. Reload: questions persist in Postgres.
+        Multiple choice only. Mark the correct choice — students never see the key on Present. Set
+        the room geofence below (teacher-only).
       </p>
 
       {questions.length === 0 ? (
@@ -227,5 +229,7 @@ export function PlanPanel({ courseId }: { courseId: string }) {
         </div>
       </form>
     </div>
+    <FenceSettings courseId={courseId} />
+    </>
   );
 }
