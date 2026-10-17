@@ -53,6 +53,12 @@ export type Question = {
 /** Question payload pushed to students — no answer key. */
 export type PublicQuestion = Omit<Question, "correctChoiceId">;
 
+export type Fence = {
+  lat: number;
+  lng: number;
+  radiusM: number;
+};
+
 export type LectureEvent =
   | { type: "waiting" }
   | {
@@ -60,6 +66,7 @@ export type LectureEvent =
       question: PublicQuestion;
       openedAt: string;
       submitCount: number;
+      fence: Fence | null;
     }
   | { type: "question_closed"; closedAt: string };
 
@@ -68,4 +75,14 @@ export type Submission = {
   userId: string;
   choiceId: string;
   submittedAt: string;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  noLocation: boolean;
+};
+
+export type SubmissionDot = Submission & {
+  name: string;
+  studentId: string | null;
+  email: string;
 };

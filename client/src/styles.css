@@ -33,9 +33,63 @@ a {
 }
 
 .shell {
-  max-width: 880px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 24px 16px 64px;
+}
+
+.present-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .present-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.geo-map {
+  height: 340px;
+  border-radius: 12px;
+  margin: 8px 0 12px;
+  z-index: 1;
+}
+
+.banner {
+  background: #5a3a12;
+  color: #ffe9c8;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.swatch::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: #9aadb8;
+}
+
+.swatch.in::before {
+  background: #3db8a8;
+}
+.swatch.out::before {
+  background: #e07a7a;
+}
+.swatch.uncertain::before {
+  background: #e0c06a;
 }
 
 .brand {

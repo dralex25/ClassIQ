@@ -3,7 +3,9 @@ import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "re
 import { api } from "./api";
 import { PlanPanel } from "./PlanPanel";
 import { PresentPanel } from "./PresentPanel";
+import { pingLocation } from "./pingLocation";
 import { useLive } from "./useLive";
+import { classifyPresence, isGeoFix, type GeoPing } from "@shared/geo";
 import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
@@ -374,12 +376,22 @@ function WaitingRoom({
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ping, setPing] = useState<GeoPing | null>(null);
+
+  useEffect(() => {
+    void pingLocation().then(setPing);
+  }, []);
 
   useEffect(() => {
     setChoiceId("");
     setSaved(null);
     setError(null);
+    if (open) void pingLocation().then(setPing);
   }, [open?.question.id]);
+
+  const bucket = classifyPresence(ping, open?.fence ?? null);
+  const showBanner =
+    !!open && (bucket === "out" || bucket === "uncertain" || bucket === "no-location");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -387,7 +399,9 @@ function WaitingRoom({
     setBusy(true);
     setError(null);
     try {
-      const result = await api.submit(choiceId);
+      const geo = await pingLocation();
+      setPing(geo);
+      const result = await api.submit(choiceId, geo);
       setSaved(result.submittedAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");
@@ -406,11 +420,27 @@ function WaitingRoom({
           You are in <strong>{me.course?.name}</strong>. A question popup will appear when class
           starts.
         </p>
+        <p className="hint">
+          {ping == null
+            ? "Requesting location…"
+            : isGeoFix(ping)
+              ? `Location ±${Math.round(ping.accuracy)} m`
+              : "No location (you can still answer)."}
+        </p>
       </div>
       {open && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="live-q">
           <div className="card modal">
             <h2 id="live-q">{open.question.stem}</h2>
+            {showBanner && (
+              <p className="banner" role="status">
+                {bucket === "out"
+                  ? "You look outside the geofence. You can still submit."
+                  : bucket === "no-location"
+                    ? "Location unavailable. You can still submit."
+                    : "Location is uncertain (accuracy is large or straddles the fence). You can still submit."}
+              </p>
+            )}
             <form onSubmit={submit}>
               {open.question.choices.map((c) => (
                 <label key={c.id} className="choice-option">

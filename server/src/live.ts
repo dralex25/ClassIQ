@@ -1,6 +1,6 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { LectureEvent } from "../../shared/contract.js";
+import type { Fence, LectureEvent } from "../../shared/contract.js";
 import { pool } from "./db.js";
 import { sessionIdFromCookieHeader, userFromSessionId } from "./auth.js";
 import { questionFromRow, toPublicQuestion } from "./questions.js";
@@ -27,9 +27,24 @@ export async function submitCount(questionId: string): Promise<number> {
   return Number(result.rows[0]?.n ?? 0);
 }
 
+function fenceFromRow(row: {
+  fence_lat: number | null;
+  fence_lng: number | null;
+  fence_radius_m: number | null;
+}): Fence | null {
+  if (row.fence_lat == null || row.fence_lng == null || row.fence_radius_m == null) return null;
+  return { lat: row.fence_lat, lng: row.fence_lng, radiusM: row.fence_radius_m };
+}
+
 export async function buildSnapshot(courseId: string): Promise<LectureEvent> {
-  const live = await pool.query<{ live_question_id: string | null; live_opened_at: Date | null }>(
-    `SELECT live_question_id, live_opened_at FROM courses WHERE id = $1`,
+  const live = await pool.query<{
+    live_question_id: string | null;
+    live_opened_at: Date | null;
+    fence_lat: number | null;
+    fence_lng: number | null;
+    fence_radius_m: number | null;
+  }>(
+    `SELECT live_question_id, live_opened_at, fence_lat, fence_lng, fence_radius_m FROM courses WHERE id = $1`,
     [courseId],
   );
   const row = live.rows[0];
@@ -48,6 +63,7 @@ export async function buildSnapshot(courseId: string): Promise<LectureEvent> {
     question: toPublicQuestion(questionFromRow(q.rows[0])),
     openedAt: row.live_opened_at.toISOString(),
     submitCount: await submitCount(row.live_question_id),
+    fence: fenceFromRow(row),
   };
 }
 
