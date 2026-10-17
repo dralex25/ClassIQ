@@ -18,7 +18,7 @@ export function PresentMap({
 }: {
   fence: GeoFence | null;
   dots: SubmissionDot[];
-  onPin: (lat: number, lng: number) => void;
+  onPin?: (lat: number, lng: number) => void;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -35,7 +35,7 @@ export function PresentMap({
       maxZoom: 19,
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
-    map.on("click", (e: L.LeafletMouseEvent) => onPinRef.current(e.latlng.lat, e.latlng.lng));
+    map.on("click", (e: L.LeafletMouseEvent) => onPinRef.current?.(e.latlng.lat, e.latlng.lng));
     mapRef.current = map;
     return () => {
       map.remove();

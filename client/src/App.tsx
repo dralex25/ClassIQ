@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api";
+import { AnalyticsPanel } from "./AnalyticsPanel";
 import { PlanPanel } from "./PlanPanel";
 import { PresentPanel } from "./PresentPanel";
 import { pingLocation } from "./pingLocation";
 import { useLive } from "./useLive";
-import { classifyPresence, isGeoFix, type GeoPing } from "@shared/geo";
 import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
@@ -195,7 +195,7 @@ function TeacherHome({
 }) {
   const [name, setName] = useState("Intro Physics");
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"plan" | "present" | "class">("present");
+  const [tab, setTab] = useState<"plan" | "present" | "analytics" | "class">("present");
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
@@ -242,12 +242,16 @@ function TeacherHome({
             <button type="button" className={tab === "present" ? "" : "secondary"} onClick={() => setTab("present")}>
               Present
             </button>
+            <button type="button" className={tab === "analytics" ? "" : "secondary"} onClick={() => setTab("analytics")}>
+              Analytics
+            </button>
             <button type="button" className={tab === "class" ? "" : "secondary"} onClick={() => setTab("class")}>
               Class
             </button>
           </div>
           {tab === "plan" && <PlanPanel courseId={me.course.id} />}
           {tab === "present" && <PresentPanel courseId={me.course.id} />}
+          {tab === "analytics" && <AnalyticsPanel courseId={me.course.id} />}
           {tab === "class" && (
           <>
           <div className="card">
@@ -284,7 +288,7 @@ function TeacherHome({
             {!roster || roster.length === 0 ? (
               <p className="hint">No students yet. Have someone join with the code.</p>
             ) : (
-              <table>
+              <table className="roster-table">
                 <thead>
                   <tr>
                     <th>Name</th>
@@ -376,22 +380,16 @@ function WaitingRoom({
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [ping, setPing] = useState<GeoPing | null>(null);
-
   useEffect(() => {
-    void pingLocation().then(setPing);
+    void pingLocation();
   }, []);
 
   useEffect(() => {
     setChoiceId("");
     setSaved(null);
     setError(null);
-    if (open) void pingLocation().then(setPing);
+    if (open) void pingLocation();
   }, [open?.question.id]);
-
-  const bucket = classifyPresence(ping, open?.fence ?? null);
-  const showBanner =
-    !!open && (bucket === "out" || bucket === "uncertain" || bucket === "no-location");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -400,7 +398,6 @@ function WaitingRoom({
     setError(null);
     try {
       const geo = await pingLocation();
-      setPing(geo);
       const result = await api.submit(choiceId, geo);
       setSaved(result.submittedAt);
     } catch (err) {
@@ -420,27 +417,11 @@ function WaitingRoom({
           You are in <strong>{me.course?.name}</strong>. A question popup will appear when class
           starts.
         </p>
-        <p className="hint">
-          {ping == null
-            ? "Requesting location…"
-            : isGeoFix(ping)
-              ? `Location ±${Math.round(ping.accuracy)} m`
-              : "No location (you can still answer)."}
-        </p>
       </div>
       {open && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="live-q">
           <div className="card modal">
             <h2 id="live-q">{open.question.stem}</h2>
-            {showBanner && (
-              <p className="banner" role="status">
-                {bucket === "out"
-                  ? "You look outside the geofence. You can still submit."
-                  : bucket === "no-location"
-                    ? "Location unavailable. You can still submit."
-                    : "Location is uncertain (accuracy is large or straddles the fence). You can still submit."}
-              </p>
-            )}
             <form onSubmit={submit}>
               {open.question.choices.map((c) => (
                 <label key={c.id} className="choice-option">

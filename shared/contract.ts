@@ -66,7 +66,6 @@ export type LectureEvent =
       question: PublicQuestion;
       openedAt: string;
       submitCount: number;
-      fence: Fence | null;
     }
   | { type: "question_closed"; closedAt: string };
 

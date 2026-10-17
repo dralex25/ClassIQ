@@ -1,6 +1,6 @@
 # ClassIQ
 
-Dummy-auth lecture shell through **slice 4**: login, join, roster, Plan, Present, student submit, **geolocation pings**, teacher **fence map**, student **warning banner** (submit never blocked). No CSV, Google auth, or paywall.
+Dummy-auth lecture shell: login, join, roster, **Plan** (MC + teacher-only geofence), **Present** (class board, no fence), **Analytics** (answers), student submit with silent location log. No CSV, Google auth, or paywall. Students never see the geofence.
 
 **Duplicate submits:** last write wins (same student + question upserts the choice and `submitted_at`).
 
@@ -78,17 +78,17 @@ WebSocket lives on the same Node process (`/ws`, proxied by Vite in dev).
 5. Students pick a choice → **Submit**. Teacher count ticks up (“N submitted”). Submit again: last write wins.
 6. Teacher **Close** — overlays disappear; waiting returns.
 
-## Try the map fence (slice 4)
+## Geofence (Plan) and Analytics
 
-Presence is classified **on the teacher map**, not by a server 403. HTTPS (or localhost) is required for real GPS. On this cloud VM, use `mockGeo` so two students can plot in-room vs dorm:
+The fence is configured in **Plan**, never on the Present board (that view is for the class). Live events do not include fence coordinates.
 
-1. Teacher → **Present**. Click the map to pin the room (Boston tiles are the default view). Drag **radius** (~150 m). Optional: **Use my GPS**.
-2. Student A (in-room): http://localhost:5173/?mockGeo=42.3601,-71.0589,12 — sign in as `student@classiq.local`.
-3. Student B (dorm): http://localhost:5173/?mockGeo=42.3736,-71.1097,25 — `student2@classiq.local`.
-4. Teacher **Start**. Both pop the MC. Student B should see an outside/uncertain **banner**; Submit stays enabled.
-5. Both submit. Map dots: teal in, red out, gold uncertain, gray counts no-location. Reload keeps pin/radius (Postgres).
+1. Teacher → **Plan** → **Geofence**. Click the map to pin, set radius (~150 m).
+2. **Present** → Start a question. Students only see stem + choices.
+3. In-room: http://localhost:5173/?mockGeo=42.3601,-71.0589,12 — `student@classiq.local`
+4. Dorm: http://localhost:5173/?mockGeo=42.3736,-71.1097,25 — `student2@classiq.local`
+5. Both submit. Teacher → **Analytics**: choice counts, answer table (name, ID, choice, presence), map of dots.
 
-Waiting screen pings once; overlay open pings; submit pings again (`enableHighAccuracy`).
+Location is still logged on submit for Analytics. Submit is never blocked for geo.
 
 ## API
 
