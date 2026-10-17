@@ -49,3 +49,23 @@ export type Question = {
   correctChoiceId: string;
   position: number;
 };
+
+/** Question payload pushed to students — no answer key. */
+export type PublicQuestion = Omit<Question, "correctChoiceId">;
+
+export type LectureEvent =
+  | { type: "waiting" }
+  | {
+      type: "question_open";
+      question: PublicQuestion;
+      openedAt: string;
+      submitCount: number;
+    }
+  | { type: "question_closed"; closedAt: string };
+
+export type Submission = {
+  questionId: string;
+  userId: string;
+  choiceId: string;
+  submittedAt: string;
+};

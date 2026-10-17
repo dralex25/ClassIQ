@@ -1,4 +1,4 @@
-import type { McChoice, Question } from "../../shared/contract.js";
+import type { McChoice, PublicQuestion, Question } from "../../shared/contract.js";
 
 const LABELS = ["A", "B", "C", "D", "E", "F"] as const;
 
@@ -19,6 +19,11 @@ export function questionFromRow(row: {
     correctChoiceId: row.correct_choice_id,
     position: row.position,
   };
+}
+
+export function toPublicQuestion(question: Question): PublicQuestion {
+  const { correctChoiceId: _key, ...pub } = question;
+  return pub;
 }
 
 export function parseQuestionBody(body: unknown):

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api";
 import { PlanPanel } from "./PlanPanel";
+import { PresentPanel } from "./PresentPanel";
+import { useLive } from "./useLive";
 import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
@@ -191,7 +193,7 @@ function TeacherHome({
 }) {
   const [name, setName] = useState("Intro Physics");
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"plan" | "class">("plan");
+  const [tab, setTab] = useState<"plan" | "present" | "class">("present");
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
@@ -235,11 +237,15 @@ function TeacherHome({
             <button type="button" className={tab === "plan" ? "" : "secondary"} onClick={() => setTab("plan")}>
               Plan
             </button>
+            <button type="button" className={tab === "present" ? "" : "secondary"} onClick={() => setTab("present")}>
+              Present
+            </button>
             <button type="button" className={tab === "class" ? "" : "secondary"} onClick={() => setTab("class")}>
               Class
             </button>
           </div>
           {tab === "plan" && <PlanPanel courseId={me.course.id} />}
+          {tab === "present" && <PresentPanel courseId={me.course.id} />}
           {tab === "class" && (
           <>
           <div className="card">
@@ -362,6 +368,34 @@ function WaitingRoom({
   me: MeResponse;
   setMe: (me: MeResponse | null) => void;
 }) {
+  const live = useLive();
+  const open = live?.type === "question_open" ? live : null;
+  const [choiceId, setChoiceId] = useState("");
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setChoiceId("");
+    setSaved(null);
+    setError(null);
+  }, [open?.question.id]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!choiceId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.submit(choiceId);
+      setSaved(result.submittedAt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Submit failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="shell">
       <Brand user={me.user} onLogout={() => logout(setMe)} />
@@ -369,10 +403,44 @@ function WaitingRoom({
         <div className="pulse" />
         <h2>Waiting for the instructor</h2>
         <p className="hint">
-          You are in <strong>{me.course?.name}</strong>. Questions will appear here in a later
-          slice.
+          You are in <strong>{me.course?.name}</strong>. A question popup will appear when class
+          starts.
         </p>
       </div>
+      {open && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="live-q">
+          <div className="card modal">
+            <h2 id="live-q">{open.question.stem}</h2>
+            <form onSubmit={submit}>
+              {open.question.choices.map((c) => (
+                <label key={c.id} className="choice-option">
+                  <input
+                    type="radio"
+                    name="choice"
+                    value={c.id}
+                    checked={choiceId === c.id}
+                    onChange={() => setChoiceId(c.id)}
+                  />
+                  <span>
+                    <strong>{c.id}.</strong> {c.text}
+                  </span>
+                </label>
+              ))}
+              {error && <p className="error">{error}</p>}
+              {saved && (
+                <p className="hint">
+                  Saved {new Date(saved).toLocaleTimeString()} (you can change and submit again).
+                </p>
+              )}
+              <div className="row">
+                <button type="submit" disabled={!choiceId || busy}>
+                  Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

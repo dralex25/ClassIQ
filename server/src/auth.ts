@@ -11,6 +11,30 @@ export function cookieName() {
   return COOKIE;
 }
 
+export function sessionIdFromCookieHeader(cookieHeader: string | undefined): string | null {
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const [rawKey, ...rest] = part.trim().split("=");
+    if (rawKey === COOKIE) {
+      return decodeURIComponent(rest.join("="));
+    }
+  }
+  return null;
+}
+
+export async function userFromSessionId(sessionId: string | null): Promise<User | null> {
+  if (!sessionId) return null;
+  const result = await pool.query(
+    `SELECT u.id, u.email, u.name, u.role, u.student_id
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.id = $1 AND s.expires_at > now()`,
+    [sessionId],
+  );
+  if (result.rowCount === 0) return null;
+  return mapUser(result.rows[0]);
+}
+
 export async function createSession(res: Response, userId: string) {
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const result = await pool.query<{ id: string }>(

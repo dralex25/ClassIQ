@@ -1,5 +1,6 @@
 import "dotenv/config";
 import path from "node:path";
+import { createServer } from "node:http";
 import express from "express";
 import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
@@ -15,6 +16,7 @@ import {
 import { randomJoinCode } from "./join-code.js";
 import type { Course, MeResponse, Question, RosterStudent } from "../../shared/contract.js";
 import { parseQuestionBody, questionFromRow } from "./questions.js";
+import { attachLive, broadcastToCourse, buildSnapshot, courseIdForUser, pushSnapshot } from "./live.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
@@ -397,6 +399,123 @@ app.post(
   },
 );
 
+app.get("/api/courses/:id/live", requireAuth, async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = String(req.params.id);
+  const allowed = await courseIdForUser(user.id, user.role);
+  if (allowed !== courseId) {
+    res.status(403).json({ error: "Not in this course" });
+    return;
+  }
+  res.json(await buildSnapshot(courseId));
+});
+
+app.post(
+  "/api/courses/:id/present/open",
+  requireAuth,
+  requireRole("teacher"),
+  async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    const courseId = String(req.params.id);
+    if (!(await requireOwnedCourse(user.id, courseId))) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const live = await pool.query<{ live_question_id: string | null }>(
+      `SELECT live_question_id FROM courses WHERE id = $1`,
+      [courseId],
+    );
+    if (live.rows[0]?.live_question_id) {
+      res.status(409).json({ error: "A question is already open. Close it first." });
+      return;
+    }
+    const questionId = typeof req.body?.questionId === "string" ? req.body.questionId : "";
+    const q = await pool.query(
+      `SELECT id FROM questions WHERE id = $1 AND course_id = $2`,
+      [questionId, courseId],
+    );
+    if (q.rowCount === 0) {
+      res.status(404).json({ error: "Question not found" });
+      return;
+    }
+    await pool.query(
+      `UPDATE courses SET live_question_id = $2, live_opened_at = now() WHERE id = $1`,
+      [courseId, questionId],
+    );
+    const snapshot = await buildSnapshot(courseId);
+    broadcastToCourse(courseId, snapshot);
+    res.json(snapshot);
+  },
+);
+
+app.post(
+  "/api/courses/:id/present/close",
+  requireAuth,
+  requireRole("teacher"),
+  async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    const courseId = String(req.params.id);
+    if (!(await requireOwnedCourse(user.id, courseId))) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const closedAt = new Date().toISOString();
+    await pool.query(
+      `UPDATE courses SET live_question_id = NULL, live_opened_at = NULL WHERE id = $1`,
+      [courseId],
+    );
+    const event = { type: "question_closed" as const, closedAt };
+    broadcastToCourse(courseId, event);
+    res.json(event);
+  },
+);
+
+app.post("/api/submit", requireAuth, requireRole("student"), async (req, res) => {
+  const user = (req as AuthedRequest).user;
+  const courseId = await courseIdForUser(user.id, user.role);
+  if (!courseId) {
+    res.status(403).json({ error: "Join a course first" });
+    return;
+  }
+  const choiceId = typeof req.body?.choiceId === "string" ? req.body.choiceId.trim().toUpperCase() : "";
+  if (!choiceId) {
+    res.status(400).json({ error: "choiceId is required" });
+    return;
+  }
+  const live = await pool.query<{ live_question_id: string | null }>(
+    `SELECT live_question_id FROM courses WHERE id = $1`,
+    [courseId],
+  );
+  const questionId = live.rows[0]?.live_question_id;
+  if (!questionId) {
+    res.status(409).json({ error: "No question is open" });
+    return;
+  }
+  const q = await pool.query<{ choices: { id: string }[] }>(
+    `SELECT choices FROM questions WHERE id = $1`,
+    [questionId],
+  );
+  const choices = q.rows[0]?.choices ?? [];
+  if (!choices.some((c) => c.id === choiceId)) {
+    res.status(400).json({ error: "Invalid choice" });
+    return;
+  }
+  const saved = await pool.query<{ submitted_at: Date }>(
+    `INSERT INTO submissions (question_id, user_id, course_id, choice_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (question_id, user_id)
+     DO UPDATE SET choice_id = EXCLUDED.choice_id, submitted_at = now()
+     RETURNING submitted_at`,
+    [questionId, user.id, courseId, choiceId],
+  );
+  await pushSnapshot(courseId);
+  res.json({
+    ok: true,
+    choiceId,
+    submittedAt: saved.rows[0].submitted_at.toISOString(),
+  });
+});
+
 app.post("/api/join", requireAuth, requireRole("student"), async (req, res) => {
   const user = (req as AuthedRequest).user;
   const raw = typeof req.body?.joinCode === "string" ? req.body.joinCode : "";
@@ -444,6 +563,8 @@ app.get("/{*path}", (req, res, next) => {
   });
 });
 
-app.listen(port, "0.0.0.0", () => {
+const server = createServer(app);
+attachLive(server);
+server.listen(port, "0.0.0.0", () => {
   console.log(`ClassIQ listening on 0.0.0.0:${port}`);
 });
