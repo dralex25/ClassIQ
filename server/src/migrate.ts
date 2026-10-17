@@ -72,7 +72,43 @@ ALTER TABLE submissions ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS accuracy DOUBLE PRECISION;
 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS no_location BOOLEAN NOT NULL DEFAULT true;
-`;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS is_correct BOOLEAN;
+
+CREATE TABLE IF NOT EXISTS presented_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS presented_items_course_opened_idx ON presented_items(course_id, opened_at DESC);
+
+UPDATE submissions s
+SET is_correct = (s.choice_id = q.correct_choice_id)
+FROM questions q
+WHERE q.id = s.question_id AND s.is_correct IS NULL;
+
+INSERT INTO presented_items (course_id, question_id, opened_at, closed_at)
+SELECT s.course_id, s.question_id, MIN(s.submitted_at),
+       CASE WHEN c.live_question_id = s.question_id THEN NULL ELSE MAX(s.submitted_at) END
+FROM submissions s
+JOIN courses c ON c.id = s.course_id
+WHERE NOT EXISTS (
+  SELECT 1 FROM presented_items p
+  WHERE p.course_id = s.course_id AND p.question_id = s.question_id
+)
+GROUP BY s.course_id, s.question_id, c.live_question_id;
+
+INSERT INTO presented_items (course_id, question_id, opened_at)
+SELECT c.id, c.live_question_id, COALESCE(c.live_opened_at, now())
+FROM courses c
+WHERE c.live_question_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM presented_items p
+    WHERE p.course_id = c.id AND p.question_id = c.live_question_id AND p.closed_at IS NULL
+  );
+`
 
 const DEMO_PASSWORD = "password";
 
@@ -112,14 +148,18 @@ async function migrate() {
     `INSERT INTO courses (teacher_id, name, join_code)
      SELECT $1, $2, $3
      WHERE NOT EXISTS (SELECT 1 FROM courses WHERE teacher_id = $1)`,
-    [teacherId, "Intro Physics", "PHY101"],
+    [teacherId, "AME 341a Fall 2026", "AME341A"],
+  );
+  await pool.query(
+    `UPDATE courses SET name = $2, join_code = $3 WHERE teacher_id = $1`,
+    [teacherId, "AME 341a Fall 2026", "AME341A"],
   );
 
   console.log("Migration complete.");
   console.log("Demo teacher: teacher@classiq.local / password");
   const course = await pool.query<{ id: string }>(
-    `SELECT id FROM courses WHERE join_code = $1`,
-    ["PHY101"],
+    `SELECT id FROM courses WHERE teacher_id = $1`,
+    [teacherId],
   );
   const courseId = course.rows[0]?.id;
   if (courseId) {
@@ -151,7 +191,7 @@ async function migrate() {
 
   console.log("Demo student: student@classiq.local / password (ID S1001)");
   console.log("Demo student 2: student2@classiq.local / password (ID S1002)");
-  console.log("Demo join code: PHY101");
+  console.log("Demo join code: AME341A");
   await pool.end();
 }
 

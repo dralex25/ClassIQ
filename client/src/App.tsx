@@ -4,9 +4,8 @@ import { api } from "./api";
 import { AnalyticsPanel } from "./AnalyticsPanel";
 import { PlanPanel } from "./PlanPanel";
 import { PresentPanel } from "./PresentPanel";
-import { pingLocation } from "./pingLocation";
-import { useLive } from "./useLive";
-import type { Course, HistoryItem, MeResponse, RosterStudent, User } from "@shared/contract";
+import { StudentApp } from "./StudentApp";
+import type { Course, MeResponse, RosterStudent, User } from "@shared/contract";
 
 export default function App() {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -47,7 +46,7 @@ function Home({
   if (!me) return <AuthScreen onAuthed={setMe} />;
   if (me.user.role === "teacher") return <TeacherHome me={me} setMe={setMe} />;
   if (!me.course) return <StudentJoin me={me} setMe={setMe} />;
-  return <WaitingRoom me={me} setMe={setMe} />;
+  return <StudentApp me={{ ...me, course: me.course }} setMe={setMe} />;
 }
 
 function Brand({ user, onLogout }: { user?: User; onLogout?: () => void }) {
@@ -193,7 +192,7 @@ function TeacherHome({
   me: MeResponse;
   setMe: (me: MeResponse | null) => void;
 }) {
-  const [name, setName] = useState("Intro Physics");
+  const [name, setName] = useState("AME 341a Fall 2026");
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"plan" | "present" | "analytics" | "class">("present");
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
@@ -256,7 +255,7 @@ function TeacherHome({
           <>
           <div className="card">
             <h2>{me.course.name}</h2>
-            <p className="hint">Share this code. Students land in the waiting room.</p>
+            <p className="hint">Share this code. Students land in Classroom.</p>
             <div className="code">{me.course.joinCode}</div>
             <p>
               Join link: <a href={joinLink}>{joinLink}</a>
@@ -352,7 +351,7 @@ function StudentJoin({
             id="joinCode"
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            placeholder="PHY101"
+            placeholder="AME341A"
             required
           />
           {error && <p className="error">{error}</p>}
@@ -363,160 +362,6 @@ function StudentJoin({
           </div>
         </form>
       </div>
-    </div>
-  );
-}
-
-function WaitingRoom({
-  me,
-  setMe,
-}: {
-  me: MeResponse;
-  setMe: (me: MeResponse | null) => void;
-}) {
-  const live = useLive();
-  const open = live?.type === "question_open" ? live : null;
-  const [choiceId, setChoiceId] = useState("");
-  const [saved, setSaved] = useState<string | null>(null);
-  const [savedChoice, setSavedChoice] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-
-  function loadHistory() {
-    api.history().then((r) => setHistory(r.history)).catch(() => undefined);
-  }
-
-  useEffect(() => {
-    void pingLocation();
-    loadHistory();
-  }, []);
-
-  useEffect(() => {
-    setChoiceId("");
-    setSaved(null);
-    setSavedChoice(null);
-    setDismissed(false);
-    setError(null);
-    if (open) void pingLocation();
-  }, [open?.question.id]);
-
-  useEffect(() => {
-    if (!open || !history.length) return;
-    const mine = history.find((h) => h.questionId === open.question.id);
-    if (mine && !saved) {
-      setChoiceId(mine.choiceId);
-      setSaved(mine.submittedAt);
-      setSavedChoice(mine.choiceId);
-    }
-  }, [open?.question.id, history, saved]);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!choiceId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const geo = await pingLocation();
-      const result = await api.submit(choiceId, geo);
-      setSaved(result.submittedAt);
-      setSavedChoice(result.choiceId);
-      loadHistory();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Submit failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const showModal = !!open && !dismissed;
-
-  return (
-    <div className="shell">
-      <Brand user={me.user} onLogout={() => logout(setMe)} />
-      <div className="card waiting">
-        <div className="pulse" />
-        <h2>Waiting for the instructor</h2>
-        <p className="hint">
-          You are in <strong>{me.course?.name}</strong>. A question popup will appear when class
-          starts.
-        </p>
-        {open && dismissed && saved && (
-          <button type="button" className="reopen" onClick={() => setDismissed(false)}>
-            <span className="saved-mark" aria-hidden>
-              ✓
-            </span>
-            Answer saved — open question
-          </button>
-        )}
-      </div>
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3>Your question history</h3>
-        {history.length === 0 ? (
-          <p className="hint">Answers you submit this class will show up here.</p>
-        ) : (
-          <ul className="history">
-            {history.map((item) => (
-              <li key={item.questionId}>
-                <span className="saved-mark" aria-hidden>
-                  ✓
-                </span>
-                <div>
-                  <strong>{item.stem}</strong>
-                  <p className="hint">
-                    {item.choiceId}. {item.choiceText} · {new Date(item.submittedAt).toLocaleTimeString()}
-                    {open?.question.id === item.questionId ? " · live" : ""}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      {showModal && open && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="live-q">
-          <div className="card modal">
-            <h2 id="live-q">{open.question.stem}</h2>
-            <form onSubmit={submit}>
-              {open.question.choices.map((c) => (
-                <label key={c.id} className="choice-option">
-                  <input
-                    type="radio"
-                    name="choice"
-                    value={c.id}
-                    checked={choiceId === c.id}
-                    onChange={() => setChoiceId(c.id)}
-                  />
-                  <span>
-                    <strong>{c.id}.</strong> {c.text}
-                  </span>
-                </label>
-              ))}
-              {error && <p className="error">{error}</p>}
-              {saved && (
-                <p className="saved-line">
-                  <span className="saved-mark" aria-hidden>
-                    ✓
-                  </span>
-                  Saved {new Date(saved).toLocaleTimeString()}
-                  {savedChoice ? ` (${savedChoice})` : ""}. You can change it and submit again.
-                </p>
-              )}
-              <div className="row">
-                <button type="submit" disabled={!choiceId || busy}>
-                  {saved ? "Update answer" : "Submit"}
-                </button>
-                {saved && (
-                  <button type="button" className="secondary" onClick={() => setDismissed(true)}>
-                    Close
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

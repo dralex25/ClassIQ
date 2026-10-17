@@ -1,6 +1,6 @@
 # ClassIQ
 
-Dummy-auth lecture shell: login, join, roster, **Plan** (MC + teacher-only geofence), **Present** (class board, no fence), **Analytics** (answers), student submit with silent location log. No CSV, Google auth, or paywall. Students never see the geofence.
+Dummy-auth lecture shell: login, join, roster, **Plan** (MC + teacher-only geofence), **Present** (class board, no fence), **Analytics** (answers + CSV), student **Classroom** / **Gradebook**, auto-grade, silent location log. No homework, Google auth, or paywall. Students never see the geofence.
 
 **Duplicate submits:** last write wins (same student + question upserts the choice and `submitted_at`).
 
@@ -48,13 +48,13 @@ Seeded by `npm run db:migrate`:
 
 | Role | Email | Password | Notes |
 | --- | --- | --- | --- |
-| Teacher | `teacher@classiq.local` | `password` | Course **Intro Physics**, join code **PHY101** |
+| Teacher | `teacher@classiq.local` | `password` | Course **AME 341a Fall 2026**, join code **AME341A** |
 | Student | `student@classiq.local` | `password` | Student ID **S1001** |
 | Student 2 | `student2@classiq.local` | `password` | Student ID **S1002** (3-browser demo) |
 
-1. Browser A: sign in as the teacher. Copy the join code or join link (`/join/PHY101`).
-2. Browser B (or a phone on the same network): sign in as the student, enter `PHY101` (or open the join link).
-3. Student lands on **Waiting for the instructor**.
+1. Browser A: sign in as the teacher. Copy the join code or join link (`/join/AME341A`).
+2. Browser B (or a phone on the same network): sign in as the student, enter `AME341A` (or open the join link).
+3. Student lands in **Classroom** (bottom nav: Classroom / Gradebook).
 4. Refresh the teacher page: roster shows name, student ID, and email.
 
 You can also register extra dummy accounts from the sign-in screen.
@@ -65,18 +65,19 @@ You can also register extra dummy accounts from the sign-in screen.
 2. **Plan** is the default tab. Add a question: stem, 2–6 choices, mark the correct one. Save.
 3. Edit, reorder with Up/Down, add another question.
 4. Reload the page — the list is still there (Postgres).
-5. Student browser stays on **Waiting for the instructor** until Present starts.
+5. Student browser stays on Classroom (“We’ll notify you when something has been presented”) until Present starts.
 
 ## Try Present (slice 3) — three browsers
 
 WebSocket lives on the same Node process (`/ws`, proxied by Vite in dev).
 
 1. **Teacher** at http://localhost:5173 — `teacher@classiq.local` / `password` → **Present**.
-2. **Student A** — `student@classiq.local` / `password` (already in PHY101 after migrate).
-3. **Student B** — `student2@classiq.local` / `password` (or register another student and join PHY101).
-4. Teacher: pick a planned MC (seed includes “What is 2 + 2?”) → **Start**. Board shows stem + choices. Both student waiting screens pop the same modal.
-5. Students pick a choice → **Submit**. A ✓ shows the answer is saved. They can **Close** the popup, see it in **Your question history**, and tap **Answer saved — open question** to change it (last write wins).
-6. Teacher **Close** — the live popup goes away; history remains.
+2. **Student A** — `student@classiq.local` / `password` (already in AME341A after migrate).
+3. **Student B** — `student2@classiq.local` / `password` (or register another student and join AME341A).
+4. Teacher: pick a planned MC (seed includes “What is 2 + 2?”) → **Start**. Board shows stem + choices. Both student Classroom screens pop the same modal.
+5. Students pick a choice → **Submit**. A ✓ appears; they can **Close** the modal and reopen it to change the answer. Last write wins. Teacher count ticks up.
+6. Teacher **Close** — overlays disappear. Students open **Gradebook** for auto-scored items (1/1 ✓, 0/1 ✗, or no submission). Prior answers also remain on `GET /api/me/history`.
+7. Teacher **Analytics** → **Export CSV** for answers + presence.
 
 ## Geofence (Plan) and Analytics
 
@@ -135,4 +136,12 @@ Slice 4 (fence + logged pings):
 | `PUT` | `/api/courses/:id/fence` | teacher |
 | `GET` | `/api/courses/:id/submissions` | teacher |
 
-Shared types live in `shared/contract.ts` and `shared/geo.ts`. Presence buckets: in / out / uncertain / no-location.
+Student gradebook / CSV:
+
+| Method | Path | Who |
+| --- | --- | --- |
+| `GET` | `/api/me/history` | student (own answers, no key) |
+| `GET` | `/api/me/gradebook` | student (presented items + auto-score) |
+| `GET` | `/api/courses/:id/export.csv` | teacher |
+
+Shared types live in `shared/contract.ts` and `shared/geo.ts`. Presence buckets: in / out / uncertain / no-location. Gradebook possible points = presented questions; scored = correct submits.

@@ -411,3 +411,158 @@ th {
     display: none;
   }
 }
+
+.student-app {
+  min-height: 100vh;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 96px;
+}
+
+.student-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.student-top h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.course-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.join-chip {
+  display: inline-block;
+  border: 1px solid var(--line);
+  background: #243542;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+}
+
+.classroom-idle {
+  text-align: center;
+  padding: 56px 12px 24px;
+}
+
+.classroom-idle .cap {
+  font-size: 4rem;
+  margin-bottom: 8px;
+}
+
+.classroom-idle h2 {
+  margin: 0 0 8px;
+}
+
+.reopen {
+  margin-top: 20px;
+}
+
+.saved-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.saved-line {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+}
+
+.student-nav {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: #121c24;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  z-index: 12;
+}
+
+.student-nav button {
+  background: transparent;
+  color: var(--muted);
+  min-width: 120px;
+}
+
+.student-nav button.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.gradebook {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grade-hero {
+  background: linear-gradient(180deg, #243a46, #18232e);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+
+.grade-num {
+  margin: 4px 0 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.grade-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.grade-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.grade-when {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.grade-mark {
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.grade-mark.ok {
+  color: var(--accent);
+}
+
+.grade-mark.bad {
+  color: var(--danger);
+}
