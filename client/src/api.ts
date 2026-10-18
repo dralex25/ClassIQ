@@ -24,9 +24,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     ...init,
   });
-  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
+  const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!res.ok) {
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body?.error || `Request failed (${res.status})`);
+  }
+  if (!body || typeof body !== "object") {
+    throw new Error("Invalid response");
   }
   return body;
 }

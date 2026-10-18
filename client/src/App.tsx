@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api";
 import { AnalyticsPanel } from "./AnalyticsPanel";
@@ -29,12 +29,45 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Home me={me} setMe={setMe} />} />
-      <Route path="/join/:code" element={<JoinLink me={me} setMe={setMe} />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/" element={<Home me={me} setMe={setMe} />} />
+        <Route path="/join/:code" element={<JoinLink me={me} setMe={setMe} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   );
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("ClassIQ render error", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="shell">
+          <div className="card">
+            <h2>Something went wrong</h2>
+            <p className="error">{this.state.error.message}</p>
+            <div className="row">
+              <button type="button" onClick={() => window.location.assign("/")}>
+                Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function Home({
@@ -44,7 +77,7 @@ function Home({
   me: MeResponse | null;
   setMe: (me: MeResponse | null) => void;
 }) {
-  if (!me) return <AuthScreen onAuthed={setMe} />;
+  if (!me?.user) return <AuthScreen onAuthed={setMe} />;
   if (me.user.role === "teacher") return <TeacherHome me={me} setMe={setMe} />;
   if (!me.course) return <StudentJoin me={me} setMe={setMe} />;
   return <StudentApp me={{ ...me, course: me.course }} setMe={setMe} />;
@@ -83,23 +116,31 @@ function AuthScreen({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    e.stopPropagation();
     setBusy(true);
     setError(null);
     try {
+      const payloadName = name.trim();
+      if (mode === "register" && !payloadName) {
+        throw new Error("Name is required");
+      }
+      if (mode === "register" && role === "student" && !studentId.trim()) {
+        throw new Error("Student ID is required");
+      }
       const me =
         mode === "login"
           ? await api.login(email, password)
           : await api.register({
               email,
               password,
-              name,
+              name: payloadName,
               role,
-              studentId: role === "student" ? studentId : undefined,
+              studentId: role === "student" ? studentId.trim() : undefined,
             });
+      if (!me?.user) throw new Error("Invalid response");
       onAuthed(me);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
-    } finally {
       setBusy(false);
     }
   }
@@ -115,13 +156,29 @@ function AuthScreen({
       <form onSubmit={submit}>
         {mode === "register" && (
           <>
-            <label htmlFor="name">Name</label>
-            <input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-            <label htmlFor="role">Role</label>
-            <select id="role" value={role} onChange={(e) => setRole(e.target.value as "teacher" | "student")}>
-              <option value="teacher">Teacher</option>
-              <option value="student">Student</option>
-            </select>
+            <label htmlFor="fullName">Name</label>
+            <input id="fullName" value={name} onChange={(e) => setName(e.target.value)} required />
+            <p className="hint" id="role-label">
+              Role
+            </p>
+            <div className="row" style={{ marginTop: 8 }} role="group" aria-labelledby="role-label">
+              <button
+                type="button"
+                className={role === "teacher" ? "" : "secondary"}
+                aria-pressed={role === "teacher"}
+                onClick={() => setRole("teacher")}
+              >
+                Teacher
+              </button>
+              <button
+                type="button"
+                className={role === "student" ? "" : "secondary"}
+                aria-pressed={role === "student"}
+                onClick={() => setRole("student")}
+              >
+                Student
+              </button>
+            </div>
             {role === "student" && (
               <>
                 <label htmlFor="studentId">Student ID</label>
@@ -431,7 +488,7 @@ function JoinLink({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!me) return;
+    if (!me?.user) return;
     if (me.user.role !== "student") {
       navigate("/", { replace: true });
       return;
@@ -449,7 +506,7 @@ function JoinLink({
       .catch((err) => setError(err instanceof Error ? err.message : "Could not join"));
   }, [me, code, navigate, setMe, location.pathname]);
 
-  if (!me) {
+  if (!me?.user) {
     return (
       <div className="shell">
         <Brand />
